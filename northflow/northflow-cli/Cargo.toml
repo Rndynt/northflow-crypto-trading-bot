@@ -1,0 +1,21 @@
+[package]
+name = "northflow"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Northflow CLI — research-first crypto trading bot"
+
+[[bin]]
+name = "northflow"
+path = "src/main.rs"
+
+[dependencies]
+northflow_crypto_trading_bot = { path = "../northflow_crypto_trading_bot" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+chrono = { workspace = true }
