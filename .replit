@@ -1,4 +1,4 @@
-modules = ["rust-stable", "nodejs-20", "web"]
+modules = ["rust-stable", "nodejs-20", "web", "bash"]
 
 [deployment]
 router = "application"
