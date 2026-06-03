@@ -1,3 +1,8 @@
+//! Northflow crypto trading engine — library root.
+//!
+//! Phase 1: core domain types are complete.
+//! Phase 2+: market data, indicators, strategy, risk, backtest, reports.
+
 pub mod advisor;
 pub mod config;
 pub mod core;

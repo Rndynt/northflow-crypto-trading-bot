@@ -1,0 +1,455 @@
+Northflow Phase 1 Build Prompt
+You are working on this repository:
+https://github.com/Rndynt/northflow-crypto-trading-bot
+Your task is to implement Phase 1 of the Northflow rebuild exactly according to the repository documentation.
+Read and follow these files first:
+
+AGENTS.md
+docs/ROADMAP.md
+config/research.toml
+
+Do not ignore those files. They define the allowed scope and development rules.
+Project mission
+Northflow is not a dashboard, not a React app, not a Telegram bot, and not an AI trading agent.
+Northflow is a deterministic research-first crypto trading engine.
+The current goal is to build the foundation for a truthful backtest engine. Do not implement live trading, paper trading, dashboard, Telegram, LLM decision making, multi-agent orchestration, strategy routing, or portfolio optimization in this phase.
+Important rule about legacy code
+The previous project may exist under:
+legacy/aria/
+Legacy code is reference-only.
+You may inspect legacy code to understand existing concepts, but you must not blindly copy it into the active source tree.
+For every piece of legacy code you want to reuse, validate it first:
+
+Is it relevant to Phase 1?
+Is it deterministic?
+Is it small enough?
+Does it avoid LLM, agents, Telegram, dashboard, and live exchange side effects?
+Can it be simplified?
+Can it be tested?
+Does it match the new Northflow architecture?
+
+If the answer is no, do not reuse it.
+If a needed module does not exist in legacy, implement it cleanly from scratch.
+Do not import from legacy into active src. Active production code must never depend on legacy modules.
+Current phase
+Implement Phase 1: Core Domain Foundation.
+Also verify Phase 0: Legacy Preservation.
+Do not implement Phase 2 or later unless needed only as a small placeholder module to make the project compile.
+Phase 0 verification: legacy preservation
+Check whether this exists:
+legacy/aria/
+If it exists, keep it as reference-only.
+If it does not exist, create this placeholder:
+legacy/README.md
+The file should explain that the previous ARIA or crypto-scalper code must be restored under legacy/aria/ if available, and that legacy code is reference-only.
+Do not block Phase 1 just because legacy is missing. Continue building the new active core from scratch if needed.
+Mandatory timeframe model
+The config must explicitly use:
+
+entry_timeframe = "1m"
+screening_timeframe = "15m"
+confirmation_timeframe = "5m"
+
+Meaning:
+
+1m is for entry and execution signals.
+15m is for screening and regime bias.
+5m is for confirmation.
+
+Never infer timeframe roles from array order.
+If config parsing exists, make sure it supports these three explicit fields.
+If config parsing is not ready yet, make sure the core types are designed to support these three fields later.
+Mandatory signal identity
+Every Signal must have signal_id.
+This is required because all later objects must trace back to the original signal:
+signal_id -> order_id -> fill_id -> position_id -> exit_order_id -> trade_id
+Signal ID is mandatory for:
+
+entry orders
+stop-loss orders
+take-profit orders
+partial take-profit orders
+trailing stop movement
+final close
+paper reconciliation
+live reconciliation
+trade journal
+backtest attribution
+
+Do not create a Signal type without signal_id.
+Recommended ID examples:
+
+SIG-BT-00000001
+SIG-BTCUSDT-20260603-000001
+ORD-SIG-BT-00000001-ENTRY
+ORD-SIG-BT-00000001-SL
+ORD-SIG-BT-00000001-TP
+TRD-SIG-BT-00000001
+
+Required active structure for Phase 1
+Create or fix this active source structure:
+
+src/main.rs
+src/lib.rs
+src/core/mod.rs
+src/core/candle.rs
+src/core/side.rs
+src/core/symbol.rs
+src/core/timeframe.rs
+src/core/signal.rs
+src/core/order.rs
+src/core/fill.rs
+src/core/position.rs
+src/core/trade.rs
+src/core/error.rs
+
+Do not put Phase 1 core types into one giant file if avoidable. Keep modules small.
+Required core types
+Implement these types:
+
+Candle
+Side
+Symbol
+Timeframe
+Signal
+SignalId
+StrategyId
+Order
+OrderId
+OrderType
+OrderStatus
+Fill
+FillId
+Position
+PositionId
+PositionStatus
+Trade
+TradeId
+TradeExitReason
+NorthflowError
+
+Use simple, deterministic Rust types.
+Avoid unnecessary external dependencies.
+Candle requirements
+Candle must include:
+
+timestamp
+open
+high
+low
+close
+volume
+
+Candle must validate:
+
+open is finite and greater than 0
+high is finite and greater than 0
+low is finite and greater than 0
+close is finite and greater than 0
+volume is finite and not negative
+high >= low
+open is inside low and high
+close is inside low and high
+
+Add unit tests for valid and invalid candles.
+Side requirements
+Side must support:
+
+Long
+Short
+
+It should expose a stable string representation:
+
+long
+short
+
+If the current project already uses Buy and Sell, either migrate it to Long and Short or provide clear mapping. For strategy and position direction, prefer Long and Short.
+Symbol requirements
+Symbol should be a small wrapper around a string.
+It must validate:
+
+non-empty
+uppercase preferred
+no whitespace
+reasonable length
+
+Example valid symbol:
+BTCUSDT
+Timeframe requirements
+Timeframe must support at least:
+
+1m
+5m
+15m
+1h
+
+It must provide:
+
+parsing from string
+conversion to seconds
+stable string output
+
+Add tests for parsing:
+
+"1m"
+"5m"
+"15m"
+"1h"
+
+Invalid values must return an error.
+Signal requirements
+Signal is the output from a strategy. It must not place orders and must not mutate account state.
+Signal must include at minimum:
+
+signal_id
+symbol
+strategy_id
+side
+entry_timeframe
+screening_timeframe
+confirmation_timeframe
+entry_time
+entry_price
+stop_loss
+take_profit
+confidence
+regime
+entry_reason
+filters_passed
+filters_failed
+expected_reward_bps
+estimated_cost_bps
+expected_net_edge_bps
+
+Signal must implement:
+
+reward/risk calculation
+valid geometry validation
+expected edge calculation or stored expected edge
+basic validation method
+
+Signal geometry rules:
+For Long:
+stop_loss < entry_price < take_profit
+For Short:
+take_profit < entry_price < stop_loss
+Add unit tests for:
+
+valid long signal
+invalid long signal
+valid short signal
+invalid short signal
+reward/risk calculation
+signal_id presence
+
+Order requirements
+Order must represent an intended order, not a strategy signal.
+Order must include:
+
+order_id
+signal_id
+symbol
+side
+order_type
+status
+requested_price
+quantity
+created_at
+
+OrderType must support:
+
+MarketEntry
+LimitEntry
+StopLoss
+TakeProfit
+PartialTakeProfit
+Close
+
+OrderStatus must support:
+
+Pending
+Accepted
+Rejected
+PartiallyFilled
+Filled
+Cancelled
+
+Do not implement exchange API logic in this phase.
+Fill requirements
+Fill must represent an executed order fill.
+Fill must include:
+
+fill_id
+order_id
+signal_id
+symbol
+side
+price
+quantity
+fee
+timestamp
+
+Do not implement live exchange fill handling in this phase.
+Position requirements
+Position must represent an open or closed position.
+Position must include:
+
+position_id
+signal_id
+entry_order_id
+symbol
+side
+entry_price
+quantity
+stop_loss
+take_profit
+opened_at
+status
+
+PositionStatus must support:
+
+Open
+PartiallyClosed
+Closed
+
+Position must provide:
+
+unrealized PnL calculation
+validation that quantity is positive
+validation that SL/TP geometry matches side
+
+Trade requirements
+Trade is the final closed result.
+Trade must include:
+
+trade_id
+signal_id
+position_id
+symbol
+strategy_id
+side
+entry_time
+exit_time
+entry_price
+exit_price
+stop_loss
+take_profit
+quantity
+gross_pnl
+fee
+slippage
+net_pnl
+reward_risk
+bars_held
+exit_reason
+entry_reason
+filters_passed
+filters_failed
+expected_edge_bps
+actual_edge_bps
+
+TradeExitReason must support:
+
+StopLoss
+TakeProfit
+PartialTakeProfit
+TimeExit
+ManualClose
+RiskClose
+EndOfBacktest
+
+Add helper methods for:
+
+is_win
+holding duration if timestamps are available
+net PnL calculation if gross, fee, and slippage are provided
+
+Error requirements
+Create a simple NorthflowError enum or struct that can represent:
+
+invalid candle
+invalid timeframe
+invalid signal
+invalid order
+invalid position
+invalid trade
+config error
+data error
+
+Do not over-engineer error handling.
+Module export requirements
+src/core/mod.rs must export the Phase 1 types cleanly.
+src/lib.rs must expose the core module.
+The project should compile without importing legacy code.
+Main CLI requirement
+The CLI does not need to run full research mode yet.
+For this phase, it is acceptable if:
+cargo run -- research --config config/research.toml
+prints a clear message that Phase 1 core domain is ready and Phase 2 market data/backtest is next.
+Do not fake a backtest result.
+Do not generate fake trades.
+Do not claim profitability.
+Tests required
+Add unit tests for:
+
+Candle validation
+Timeframe parsing
+Signal geometry
+Signal reward/risk
+Position validation
+Position PnL calculation
+Trade win/loss classification
+ID chain presence where applicable
+
+Minimum command target:
+
+cargo build
+cargo test
+
+If build or tests fail, fix them before finishing.
+Documentation update
+Update README or docs if needed to state:
+
+current phase is Phase 1
+paper and live modes are disabled
+Signal ID is mandatory
+timeframe roles are explicit
+legacy code is reference-only
+
+Do not remove docs/ROADMAP.md or AGENTS.md.
+Strictly forbidden in this phase
+Do not create:
+
+React app
+TypeScript app
+dashboard
+web UI
+Telegram integration
+LLM trading decision
+manager agent
+learning agent
+survival agent
+orchestrator
+live exchange order placement
+paper trading loop
+multi-strategy router
+portfolio optimizer
+100x leverage logic
+
+Do not make placeholder dashboards.
+Do not build a UI.
+Do not add frontend dependencies.
+Expected final result
+At the end of this phase, the repository should have:
+
+legacy preserved or clearly documented as missing
+clean core domain modules
+explicit timeframe model support
+mandatory signal_id support
+order/fill/position/trade traceability types
+unit tests for core behavior
+cargo build passing
+cargo test passing
+
+Commit message suggestion:
+phase1: implement core trading domain and signal traceability

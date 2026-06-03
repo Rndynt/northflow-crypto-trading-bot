@@ -1,48 +1,61 @@
+//! ResearchConfig — parsed from config/research.toml.
+//! Timeframe roles are explicit; never inferred from array order.
+
 use std::{fs, path::Path};
 
 #[derive(Debug, Clone)]
 pub struct ResearchConfig {
-    // data
-    pub symbols: Vec<String>,
-    pub data_dir: String,
-    pub reports_dir: String,
+    // pairs
+    pub symbols:                Vec<String>,
+    /// entry_timeframe = "1m"
+    pub entry_timeframe:        String,
+    /// screening_timeframe = "15m"
+    pub screening_timeframe:    String,
+    /// confirmation_timeframe = "5m"
+    pub confirmation_timeframe: String,
+    // data / output
+    pub data_dir:               String,
+    pub reports_dir:            String,
     // risk
-    pub initial_equity: f64,
-    pub risk_per_trade_pct: f64,
-    pub max_open_positions: usize,
-    pub max_leverage: f64,
-    pub min_reward_risk: f64,
-    pub max_daily_loss_pct: f64,
-    pub max_drawdown_pct: f64,
+    pub initial_equity:         f64,
+    pub risk_per_trade_pct:     f64,
+    pub max_open_positions:     usize,
+    pub max_leverage:           f64,
+    pub min_reward_risk:        f64,
+    pub max_daily_loss_pct:     f64,
+    pub max_drawdown_pct:       f64,
     // cost
-    pub taker_fee_bps: f64,
-    pub slippage_bps: f64,
-    pub spread_bps: f64,
-    pub market_impact_bps: f64,
+    pub taker_fee_bps:          f64,
+    pub slippage_bps:           f64,
+    pub spread_bps:             f64,
+    pub market_impact_bps:      f64,
     // backtest
-    pub conservative_intrabar: bool,
-    pub min_confidence: u8,
+    pub conservative_intrabar:  bool,
+    pub min_confidence:         u8,
 }
 
 impl Default for ResearchConfig {
     fn default() -> Self {
         Self {
-            symbols: vec!["BTCUSDT".to_string()],
-            data_dir: "data/historical".to_string(),
-            reports_dir: "reports".to_string(),
-            initial_equity: 5000.0,
-            risk_per_trade_pct: 0.25,
-            max_open_positions: 1,
-            max_leverage: 3.0,
-            min_reward_risk: 1.5,
-            max_daily_loss_pct: 1.5,
-            max_drawdown_pct: 5.0,
-            taker_fee_bps: 4.0,
-            slippage_bps: 2.0,
-            spread_bps: 1.0,
-            market_impact_bps: 1.0,
-            conservative_intrabar: true,
-            min_confidence: 65,
+            symbols:                vec!["BTCUSDT".to_string()],
+            entry_timeframe:        "1m".to_string(),
+            screening_timeframe:    "15m".to_string(),
+            confirmation_timeframe: "5m".to_string(),
+            data_dir:               "data/historical".to_string(),
+            reports_dir:            "reports".to_string(),
+            initial_equity:         5000.0,
+            risk_per_trade_pct:     0.25,
+            max_open_positions:     1,
+            max_leverage:           3.0,
+            min_reward_risk:        1.5,
+            max_daily_loss_pct:     1.5,
+            max_drawdown_pct:       5.0,
+            taker_fee_bps:          4.0,
+            slippage_bps:           2.0,
+            spread_bps:             1.0,
+            market_impact_bps:      1.0,
+            conservative_intrabar:  true,
+            min_confidence:         65,
         }
     }
 }
@@ -62,25 +75,28 @@ impl ResearchConfig {
                 continue;
             }
             let Some((key, value)) = line.split_once('=') else { continue };
-            let key = key.trim();
+            let key   = key.trim();
             let value = value.trim().trim_matches('"');
             match key {
-                "symbols"               => cfg.symbols = parse_string_array(value),
-                "data_dir"              => cfg.data_dir = value.to_string(),
-                "reports_dir"           => cfg.reports_dir = value.to_string(),
-                "initial_equity_usd"    => cfg.initial_equity = parse_f64(value, cfg.initial_equity),
-                "risk_per_trade_pct"    => cfg.risk_per_trade_pct = parse_f64(value, cfg.risk_per_trade_pct),
-                "max_open_positions"    => cfg.max_open_positions = value.parse().unwrap_or(cfg.max_open_positions),
-                "max_leverage"          => cfg.max_leverage = parse_f64(value, cfg.max_leverage),
-                "min_reward_risk"       => cfg.min_reward_risk = parse_f64(value, cfg.min_reward_risk),
-                "max_daily_loss_pct"    => cfg.max_daily_loss_pct = parse_f64(value, cfg.max_daily_loss_pct),
-                "max_drawdown_pct"      => cfg.max_drawdown_pct = parse_f64(value, cfg.max_drawdown_pct),
-                "taker_fee_bps"         => cfg.taker_fee_bps = parse_f64(value, cfg.taker_fee_bps),
-                "slippage_bps"          => cfg.slippage_bps = parse_f64(value, cfg.slippage_bps),
-                "spread_bps"            => cfg.spread_bps = parse_f64(value, cfg.spread_bps),
-                "market_impact_bps"     => cfg.market_impact_bps = parse_f64(value, cfg.market_impact_bps),
-                "conservative_intrabar" => cfg.conservative_intrabar = value == "true",
-                "min_confidence"        => cfg.min_confidence = value.parse().unwrap_or(cfg.min_confidence),
+                "symbols"                => cfg.symbols = parse_string_array(value),
+                "entry_timeframe"        => cfg.entry_timeframe = value.to_string(),
+                "screening_timeframe"    => cfg.screening_timeframe = value.to_string(),
+                "confirmation_timeframe" => cfg.confirmation_timeframe = value.to_string(),
+                "data_dir"               => cfg.data_dir = value.to_string(),
+                "reports_dir"            => cfg.reports_dir = value.to_string(),
+                "initial_equity_usd"     => cfg.initial_equity = parse_f64(value, cfg.initial_equity),
+                "risk_per_trade_pct"     => cfg.risk_per_trade_pct = parse_f64(value, cfg.risk_per_trade_pct),
+                "max_open_positions"     => cfg.max_open_positions = value.parse().unwrap_or(cfg.max_open_positions),
+                "max_leverage"           => cfg.max_leverage = parse_f64(value, cfg.max_leverage),
+                "min_reward_risk"        => cfg.min_reward_risk = parse_f64(value, cfg.min_reward_risk),
+                "max_daily_loss_pct"     => cfg.max_daily_loss_pct = parse_f64(value, cfg.max_daily_loss_pct),
+                "max_drawdown_pct"       => cfg.max_drawdown_pct = parse_f64(value, cfg.max_drawdown_pct),
+                "taker_fee_bps"          => cfg.taker_fee_bps = parse_f64(value, cfg.taker_fee_bps),
+                "slippage_bps"           => cfg.slippage_bps = parse_f64(value, cfg.slippage_bps),
+                "spread_bps"             => cfg.spread_bps = parse_f64(value, cfg.spread_bps),
+                "market_impact_bps"      => cfg.market_impact_bps = parse_f64(value, cfg.market_impact_bps),
+                "conservative_intrabar"  => cfg.conservative_intrabar = value == "true",
+                "min_confidence"         => cfg.min_confidence = value.parse().unwrap_or(cfg.min_confidence),
                 _ => {}
             }
         }

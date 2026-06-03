@@ -1,1 +1,1 @@
-- [Rust-only project](rust-only-project.md) — this Replit is pure Rust, no Node.js/frontend; nodejs-24 uninstalled, rust-stable installed
+- [Phase 1 Core Domain](phase1-core-domain.md) — Phase 1 complete: all core types in src/core/, 61 tests pass, CLI prints status.
