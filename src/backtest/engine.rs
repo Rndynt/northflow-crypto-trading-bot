@@ -154,6 +154,15 @@ impl BacktestEngine {
         for i in 0..n {
             let candle = one_minute[i];
 
+            if i > 0 && i % 50_000 == 0 {
+                println!(
+                    "  Backtest progress: {}/{} 1m candles ({:.1}%)",
+                    i,
+                    n,
+                    i as f64 / n as f64 * 100.0
+                );
+            }
+
             // Update 1m indicator engine.
             let snap_1m = eng_1m.next(candle)?;
 
@@ -314,6 +323,12 @@ impl BacktestEngine {
             }
         }
 
+        println!(
+            "  Backtest complete: {} trades, final equity {:.2}",
+            trades.len(),
+            equity
+        );
+
         let summary = Metrics::summarize(&trades, &equity_curve);
 
         Ok(Some(BacktestResult {
@@ -350,12 +365,23 @@ fn try_assess_risk(
 }
 
 // ── Helper: latest completed snapshot with ts <= max_ts ───────────────────────
+//
+// Uses partition_point (binary search) for O(log n) lookup.
+// The slice is always sorted chronologically because snapshots are precomputed
+// from sorted candles.  No-lookahead semantics are unchanged: only snapshots
+// with ts <= max_ts are eligible.
 
 fn latest_snap<'a>(
     snaps: &'a [(i64, IndicatorSnapshot, Candle)],
     max_ts: i64,
 ) -> Option<&'a (i64, IndicatorSnapshot, Candle)> {
-    snaps.iter().rev().find(|(ts, _, _)| *ts <= max_ts)
+    let idx = snaps.partition_point(|(ts, _, _)| *ts <= max_ts);
+
+    if idx == 0 {
+        None
+    } else {
+        Some(&snaps[idx - 1])
+    }
 }
 
 // ── Helper: drawdown percentage ───────────────────────────────────────────────
@@ -752,6 +778,79 @@ mod tests {
         let result = latest_snap(&snaps, max);
         assert!(result.is_some());
         assert_eq!(result.unwrap().0, max);
+    }
+
+    // ── Binary-search latest_snap tests ──────────────────────────────────────
+
+    fn make_snaps(timestamps: &[i64]) -> Vec<(i64, IndicatorSnapshot, Candle)> {
+        let mut eng = IndicatorEngine::new_default().unwrap();
+        timestamps
+            .iter()
+            .map(|&ts| {
+                let c = make_candle(ts, 100.0, 110.0, 90.0, 105.0);
+                let snap = eng.next(c).unwrap();
+                (ts, snap, c)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn latest_snap_uses_exact_match() {
+        let timestamps = [1_000_000, 2_000_000, 3_000_000];
+        let snaps = make_snaps(&timestamps);
+        let result = latest_snap(&snaps, 2_000_000);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().0, 2_000_000);
+    }
+
+    #[test]
+    fn latest_snap_returns_previous_when_between_timestamps() {
+        let timestamps = [1_000_000, 2_000_000, 3_000_000];
+        let snaps = make_snaps(&timestamps);
+        // 1_500_000 is between index 0 and 1 → must return index 0
+        let result = latest_snap(&snaps, 1_500_000);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().0, 1_000_000);
+    }
+
+    #[test]
+    fn latest_snap_returns_none_before_first_timestamp() {
+        let timestamps = [1_000_000, 2_000_000, 3_000_000];
+        let snaps = make_snaps(&timestamps);
+        let result = latest_snap(&snaps, 999_999);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn latest_snap_returns_last_when_after_last_timestamp() {
+        let timestamps = [1_000_000, 2_000_000, 3_000_000];
+        let snaps = make_snaps(&timestamps);
+        let result = latest_snap(&snaps, 9_999_999);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().0, 3_000_000);
+    }
+
+    #[test]
+    fn latest_snap_never_returns_snapshot_with_ts_greater_than_max() {
+        let timestamps = [1_000_000, 2_000_000, 3_000_000];
+        let snaps = make_snaps(&timestamps);
+        for &max_ts in &[
+            500_000_i64,
+            1_000_000,
+            1_500_000,
+            2_000_000,
+            2_500_000,
+            3_000_000,
+        ] {
+            if let Some(snap) = latest_snap(&snaps, max_ts) {
+                assert!(
+                    snap.0 <= max_ts,
+                    "no-lookahead violated: snap.ts={} > max_ts={}",
+                    snap.0,
+                    max_ts
+                );
+            }
+        }
     }
 
     // ── Same-candle exit after entry ─────────────────────────────────────────

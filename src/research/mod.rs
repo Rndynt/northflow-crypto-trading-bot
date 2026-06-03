@@ -107,6 +107,7 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
     }
 
     // Run backtest.
+    println!("Running backtest replay...");
     match BacktestEngine::run(cfg, symbol) {
         Err(e) => {
             println!("  Backtest error: {e}");
@@ -152,6 +153,7 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
                     println!("  Warning: could not write base reports: {e}");
                 }
             }
+            println!("Base backtest reports written.");
             println!();
 
             // ── Phase 7: attribution, audit, and manifest ─────────────────────
@@ -223,6 +225,7 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
                     println!("  Warning: could not write Phase 7 reports: {e}");
                 }
             }
+            println!("Phase 7 attribution reports written.");
             println!();
         }
     }

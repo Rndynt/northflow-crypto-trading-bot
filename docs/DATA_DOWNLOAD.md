@@ -200,6 +200,27 @@ After the CSV exists:
 cargo run -- research --config config/research.toml
 ```
 
+### Release mode for large datasets
+
+For large datasets such as 12 months of BTCUSDT 1m candles (~527k candles),
+use release mode:
+
+```bash
+cargo run --release -- research --config config/research.toml
+```
+
+- Debug mode can be significantly slower on 500k+ candles.
+- Release mode is recommended for all real backtests.
+- If the CLI appears idle, progress logs now print every 50,000 candles:
+
+```text
+Running backtest replay...
+  Backtest progress: 50000/527040 1m candles (9.5%)
+  Backtest progress: 100000/527040 1m candles (19.0%)
+  ...
+  Backtest complete: X trades, final equity Y
+```
+
 Expected report files:
 
 ```text
