@@ -20,6 +20,7 @@
 pub struct RiskRejection {
     pub signal_id: String,
     pub stage: String,
+    pub entry_geometry_mode: String,
     pub timestamp: i64,
     pub side: String,
     pub regime: String,
@@ -41,6 +42,9 @@ pub struct RiskRejection {
 /// `SignalFlowSummary::finalise`.
 #[derive(Debug, Clone, Default)]
 pub struct SignalFlowSummary {
+    /// Active entry geometry mode for this backtest run.
+    /// Set to the actual mode string before calling `finalise`.
+    pub entry_geometry_mode: String,
     /// Number of signals produced by the strategy.
     pub signals_generated: usize,
     /// Signals that passed the initial risk assessment at signal-close price.
@@ -101,6 +105,7 @@ mod tests {
         RiskRejection {
             signal_id: "SIG-BT-00000001".to_string(),
             stage: stage.to_string(),
+            entry_geometry_mode: "preserve_signal_levels".to_string(),
             timestamp: 1_700_000_000_000,
             side: "long".to_string(),
             regime: "bullish".to_string(),

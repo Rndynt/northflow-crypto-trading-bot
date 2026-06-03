@@ -164,16 +164,17 @@ impl ReportWriter {
         let path = dir.join("risk_rejections.csv");
         let mut rows: Vec<String> = Vec::with_capacity(rejections.len() + 1);
         rows.push(
-            "signal_id,stage,timestamp,side,regime,reason,equity,peak_equity,\
+            "signal_id,stage,entry_geometry_mode,timestamp,side,regime,reason,equity,peak_equity,\
              drawdown_pct,daily_realized_pnl,expected_reward_bps,\
              expected_cost_bps,expected_net_edge_bps"
                 .to_string(),
         );
         for r in rejections {
             rows.push(format!(
-                "{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}",
+                "{},{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}",
                 csv_escape(&r.signal_id),
                 csv_escape(&r.stage),
+                csv_escape(&r.entry_geometry_mode),
                 r.timestamp,
                 csv_escape(&r.side),
                 csv_escape(&r.regime),
@@ -201,6 +202,7 @@ impl ReportWriter {
         let path = dir.join("signal_flow_summary.json");
         let json = format!(
             "{{\n\
+              \"entry_geometry_mode\": \"{}\",\n\
               \"signals_generated\": {},\n\
               \"signals_preapproved\": {},\n\
               \"signals_rejected_initial_risk\": {},\n\
@@ -214,6 +216,7 @@ impl ReportWriter {
               \"rejections_expected_net_edge\": {},\n\
               \"rejections_other\": {}\n\
             }}",
+            flow.entry_geometry_mode,
             flow.signals_generated,
             flow.signals_preapproved,
             flow.signals_rejected_initial_risk,
@@ -324,6 +327,7 @@ mod tests {
         RiskRejection {
             signal_id: "SIG-BT-00000001".to_string(),
             stage: "initial_risk".to_string(),
+            entry_geometry_mode: "preserve_signal_levels".to_string(),
             timestamp: 1_700_000_000_000,
             side: "long".to_string(),
             regime: "bullish".to_string(),
@@ -468,7 +472,7 @@ mod tests {
         .unwrap();
         let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         assert!(
-            content.contains("signal_id,stage,timestamp,side,regime,reason"),
+            content.contains("signal_id,stage,entry_geometry_mode,timestamp,side,regime,reason"),
             "header missing: {content}"
         );
         assert!(content.contains("SIG-BT-00000001"), "signal_id missing");
@@ -491,7 +495,7 @@ mod tests {
         .unwrap();
         let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         assert!(
-            content.contains("signal_id,stage,timestamp,side,regime,reason"),
+            content.contains("signal_id,stage,entry_geometry_mode,timestamp,side,regime,reason"),
             "header missing for empty file: {content}"
         );
         // Only header, no data rows
@@ -521,6 +525,10 @@ mod tests {
         ReportWriter::write_all(&dir, &test_summary(), &[], &[], &[], &flow).unwrap();
         let content = std::fs::read_to_string(format!("{dir}/signal_flow_summary.json")).unwrap();
         assert!(
+            content.contains("\"entry_geometry_mode\""),
+            "missing entry_geometry_mode"
+        );
+        assert!(
             content.contains("\"signals_generated\": 10"),
             "missing signals_generated"
         );
@@ -545,6 +553,7 @@ mod tests {
         let r = RiskRejection {
             signal_id: "SIG-BT-00000001".to_string(),
             stage: "initial_risk".to_string(),
+            entry_geometry_mode: "preserve_signal_levels".to_string(),
             timestamp: 1_700_000_000_000,
             side: "long".to_string(),
             regime: "bull,ish".to_string(), // contains comma — must be escaped
@@ -649,8 +658,8 @@ mod tests {
         let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         let header = content.lines().next().unwrap_or("");
         assert!(
-            header.contains("signal_id,stage,timestamp"),
-            "stage must be in header even when no rejections: {header}"
+            header.contains("signal_id,stage,entry_geometry_mode,timestamp"),
+            "entry_geometry_mode must be in header even when no rejections: {header}"
         );
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(
@@ -667,6 +676,7 @@ mod tests {
         let r = RiskRejection {
             signal_id: "SIG-BT-00000001".to_string(),
             stage: "initial,risk".to_string(), // comma must be escaped
+            entry_geometry_mode: "preserve_signal_levels".to_string(),
             timestamp: 1_700_000_000_000,
             side: "long".to_string(),
             regime: "bullish".to_string(),

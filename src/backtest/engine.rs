@@ -28,6 +28,7 @@
 use std::path::Path;
 
 use crate::backtest::fill_model::{FillModel, OpenSimPosition};
+use crate::backtest::geometry::{adjusted_signal_for_actual_entry, EntryGeometryMode};
 use crate::backtest::metrics::{BacktestSummary, EquityPoint, Metrics};
 use crate::backtest::risk_trace::{RiskRejection, SignalFlowSummary};
 use crate::config::ResearchConfig;
@@ -47,6 +48,7 @@ pub struct BacktestConfig {
     pub reports_dir: String,
     pub conservative_intrabar: bool,
     pub max_bars_held: u32,
+    pub entry_geometry_mode: EntryGeometryMode,
 }
 
 // ── BacktestResult ────────────────────────────────────────────────────────────
@@ -120,11 +122,13 @@ impl BacktestEngine {
             snaps_15m.push((c.timestamp, snap, c));
         }
 
+        let geometry_mode = EntryGeometryMode::parse(&cfg.entry_geometry_mode)?;
         let bt_cfg = BacktestConfig {
             initial_equity: cfg.initial_equity,
             reports_dir: cfg.reports_dir.clone(),
             conservative_intrabar: cfg.conservative_intrabar,
             max_bars_held: cfg.max_bars_held,
+            entry_geometry_mode: geometry_mode,
         };
         let risk_cfg = cfg.risk_config();
         let cost_cfg = cfg.cost_model_config();
@@ -198,7 +202,7 @@ impl BacktestEngine {
                         candle.open,
                         cost_cfg.slippage_bps,
                     );
-                    let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price);
+                    let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price, bt_cfg.entry_geometry_mode);
 
                     if !adjusted.valid_geometry() {
                         // Adverse slippage made the trade geometry invalid — soft reject.
@@ -206,6 +210,7 @@ impl BacktestEngine {
                         risk_rejections.push(build_rejection(
                             &adjusted,
                             "actual_entry",
+                            bt_cfg.entry_geometry_mode.as_str(),
                             candle.timestamp,
                             equity,
                             peak_equity,
@@ -230,6 +235,7 @@ impl BacktestEngine {
                                 risk_rejections.push(build_rejection(
                                     &adjusted,
                                     "actual_entry",
+                                    bt_cfg.entry_geometry_mode.as_str(),
                                     candle.timestamp,
                                     equity,
                                     peak_equity,
@@ -247,6 +253,7 @@ impl BacktestEngine {
                                     risk_rejections.push(build_rejection(
                                         &adjusted,
                                         "actual_entry",
+                                        bt_cfg.entry_geometry_mode.as_str(),
                                         candle.timestamp,
                                         equity,
                                         peak_equity,
@@ -384,6 +391,7 @@ impl BacktestEngine {
                                         risk_rejections.push(build_rejection(
                                             &signal,
                                             "initial_risk",
+                                            bt_cfg.entry_geometry_mode.as_str(),
                                             candle.timestamp,
                                             equity,
                                             peak_equity,
@@ -430,6 +438,7 @@ impl BacktestEngine {
         }
 
         // Finalise signal flow counters.
+        signal_flow.entry_geometry_mode = bt_cfg.entry_geometry_mode.as_str().to_string();
         signal_flow.finalise(&risk_rejections, trades.len());
 
         println!(
@@ -550,42 +559,12 @@ fn build_trade(
     }
 }
 
-// ── Helper: adjust signal entry price to actual adverse fill price ─────────────
-//
-// Clones the signal and updates entry_price, expected_reward_bps, and
-// expected_net_edge_bps to reflect the real fill price at the next candle open.
-// All other fields (stop_loss, take_profit, side, signal_id, etc.) are unchanged.
-//
-// This adjusted signal is used for:
-//   1. valid_geometry() check — if slippage moves entry past SL or TP, reject.
-//   2. Re-risk assessment (position sizing at actual price).
-//   3. build_trade — reward_risk calculated from actual entry.
-
-fn adjusted_signal_for_actual_entry(signal: &Signal, actual_entry_price: f64) -> Signal {
-    let expected_reward_bps = if actual_entry_price > 0.0 {
-        match signal.side {
-            Side::Long => (signal.take_profit - actual_entry_price) / actual_entry_price * 10_000.0,
-            Side::Short => {
-                (actual_entry_price - signal.take_profit) / actual_entry_price * 10_000.0
-            }
-        }
-    } else {
-        0.0
-    };
-    let expected_net_edge_bps = expected_reward_bps - signal.estimated_cost_bps;
-    Signal {
-        entry_price: actual_entry_price,
-        expected_reward_bps,
-        expected_net_edge_bps,
-        ..signal.clone()
-    }
-}
-
 // ── Helper: build a RiskRejection record ──────────────────────────────────────
 
 fn build_rejection(
     signal: &Signal,
     stage: &str,
+    entry_geometry_mode: &str,
     timestamp: i64,
     equity: f64,
     peak_equity: f64,
@@ -603,6 +582,7 @@ fn build_rejection(
     RiskRejection {
         signal_id: signal.signal_id.as_str().to_string(),
         stage: stage.to_string(),
+        entry_geometry_mode: entry_geometry_mode.to_string(),
         timestamp,
         side: signal.side.as_str().to_string(),
         regime: signal.regime.clone(),
@@ -703,6 +683,7 @@ mod tests {
             reports_dir: "/tmp".to_string(),
             conservative_intrabar: true,
             max_bars_held: 60,
+            entry_geometry_mode: EntryGeometryMode::PreserveSignalLevels,
         }
     }
 
@@ -1139,7 +1120,7 @@ mod tests {
         let signal = long_signal(); // entry=30000, TP=30600, SL=29700
         // Adverse price slightly higher than original entry
         let actual_price = 30_006.0;
-        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price);
+        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price, EntryGeometryMode::PreserveSignalLevels);
 
         assert_eq!(adjusted.entry_price, actual_price);
         // expected_reward_bps = (30600 - 30006) / 30006 * 10000 ≈ 197.99
@@ -1188,7 +1169,7 @@ mod tests {
         };
         // Adverse price slightly lower than original entry (short fills below open)
         let actual_price = 29_994.0;
-        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price);
+        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price, EntryGeometryMode::PreserveSignalLevels);
 
         assert_eq!(adjusted.entry_price, actual_price);
         // expected_reward_bps = (29994 - 29400) / 29994 * 10000
@@ -1206,7 +1187,7 @@ mod tests {
         // Long signal: TP=30600, SL=29700. If actual entry >= TP, geometry invalid.
         let signal = long_signal(); // entry=30000, TP=30600, SL=29700
         let actual_price = 30_600.0; // == TP → invalid geometry for long (need entry < TP)
-        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price);
+        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price, EntryGeometryMode::PreserveSignalLevels);
         assert!(
             !adjusted.valid_geometry(),
             "entry == take_profit must be invalid geometry for long"
@@ -1217,7 +1198,7 @@ mod tests {
     fn actual_entry_invalid_long_geometry_above_tp_is_rejected_not_fatal() {
         let signal = long_signal();
         let actual_price = 30_700.0; // > TP → definitely invalid
-        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price);
+        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price, EntryGeometryMode::PreserveSignalLevels);
         assert!(
             !adjusted.valid_geometry(),
             "entry > take_profit must be invalid geometry for long"
@@ -1229,7 +1210,7 @@ mod tests {
         let signal = long_signal(); // entry=30000, TP=30600, SL=29700
         // Slippage of 2 bps on 30000 → 30006 < TP=30600 and > SL=29700 → valid
         let actual_price = FillModel::adverse_entry_price(Side::Long, 30_000.0, 2.0);
-        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price);
+        let adjusted = adjusted_signal_for_actual_entry(&signal, actual_price, EntryGeometryMode::PreserveSignalLevels);
         assert!(
             adjusted.valid_geometry(),
             "normal slippage must not invalidate geometry: actual_price={actual_price}"
@@ -1282,6 +1263,7 @@ mod tests {
         let rej = build_rejection(
             &signal,
             "initial_risk",
+            "preserve_signal_levels",
             signal.entry_time,
             10_000.0,
             10_000.0,
@@ -1300,6 +1282,7 @@ mod tests {
         let rej = build_rejection(
             &signal,
             "actual_entry",
+            "preserve_signal_levels",
             signal.entry_time,
             10_000.0,
             10_000.0,
@@ -1349,6 +1332,7 @@ mod tests {
         let rej = build_rejection(
             &signal,
             "initial_risk",
+            "preserve_signal_levels",
             signal.entry_time,
             risk_ctx.equity,
             risk_ctx.peak_equity,
@@ -1396,6 +1380,7 @@ mod tests {
         let rej = build_rejection(
             &signal,
             "actual_entry",
+            "preserve_signal_levels",
             signal.entry_time,
             risk_ctx.equity,
             risk_ctx.peak_equity,

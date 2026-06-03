@@ -109,6 +109,29 @@ northflow live    # exits with error — paper/live parity not yet proven
 
 ---
 
+## Entry Geometry Mode
+
+Configurable via `config/research.toml` under `[backtest]`:
+
+```toml
+entry_geometry_mode = "preserve_signal_levels"   # default
+# entry_geometry_mode = "reanchor_to_actual_entry"
+```
+
+Controls how `stop_loss` and `take_profit` are handled after the actual adverse fill price is known at the next 1m candle open.
+
+| Mode | SL / TP | Effective RR |
+|---|---|---|
+| `preserve_signal_levels` | Kept at original absolute levels from signal close | Can degrade when actual entry moves adversely |
+| `reanchor_to_actual_entry` | Re-anchored around actual fill using original risk distance × original RR ratio | Preserved (simulates bracket order placed after fill) |
+
+Both modes always update `entry_price`, `expected_reward_bps`, and `expected_net_edge_bps` to reflect the actual fill price.  
+Neither mode modifies `signal_id`, `side`, `confidence`, `estimated_cost_bps`, or any identity field.
+
+The active mode is recorded in every `RiskRejection` row (`entry_geometry_mode` column in `risk_rejections.csv`) and in `signal_flow_summary.json` so runs with different modes are always distinguishable in reports.
+
+---
+
 ## Phase 6 — Backtest Engine
 
 Phase 6 is a deterministic historical simulation only.

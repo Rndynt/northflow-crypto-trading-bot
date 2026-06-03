@@ -33,3 +33,4 @@ data_dir = "data/historical"
 reports_dir = "reports"
 conservative_intrabar = true
 max_bars_held = 60
+entry_geometry_mode = "preserve_signal_levels"

@@ -40,6 +40,7 @@ pub struct ResearchConfig {
     pub conservative_intrabar: bool,
     pub max_bars_held: u32,
     pub min_confidence: u8,
+    pub entry_geometry_mode: String,
 }
 
 impl Default for ResearchConfig {
@@ -66,6 +67,7 @@ impl Default for ResearchConfig {
             conservative_intrabar: true,
             max_bars_held: 60,
             min_confidence: 65,
+            entry_geometry_mode: "preserve_signal_levels".to_string(),
         }
     }
 }
@@ -123,6 +125,7 @@ impl ResearchConfig {
                 "min_confidence" => {
                     cfg.min_confidence = value.parse().unwrap_or(cfg.min_confidence)
                 }
+                "entry_geometry_mode" => cfg.entry_geometry_mode = value.to_string(),
                 _ => {}
             }
         }
