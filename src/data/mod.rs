@@ -1,6 +1,24 @@
+//! DEPRECATED — superseded by `crate::market::OhlcvLoader` (Phase 2).
+//!
+//! This thin CSV loader is kept for compatibility but should not be used
+//! in new code.  Use `crate::market::OhlcvLoader::load_file()` instead:
+//!
+//! ```ignore
+//! use northflow_crypto_trading_bot::market::OhlcvLoader;
+//! let result = OhlcvLoader::load_file(std::path::Path::new("data/historical/BTCUSDT.csv"))?;
+//! ```
+//!
+//! Differences from the Phase 2 loader:
+//!   - Does not report data quality issues
+//!   - Does not detect duplicate timestamps
+//!   - Does not detect missing candle gaps
+//!   - Does not sort output candles
+//!   - Uses fallback column indices instead of erroring on missing columns
+
 use crate::core::Candle;
 use std::{fs, path::Path};
 
+#[allow(dead_code)]
 pub fn load_ohlcv_csv(path: impl AsRef<Path>) -> Result<Vec<Candle>, String> {
     let raw = fs::read_to_string(path.as_ref())
         .map_err(|e| format!("failed to read CSV {}: {e}", path.as_ref().display()))?;
@@ -8,11 +26,11 @@ pub fn load_ohlcv_csv(path: impl AsRef<Path>) -> Result<Vec<Candle>, String> {
     let Some(header) = lines.next() else { return Ok(Vec::new()) };
     let cols: Vec<String> = header.split(',').map(|s| s.trim().to_lowercase()).collect();
     let idx = |name: &str| cols.iter().position(|c| c == name);
-    let ts_i = idx("timestamp").or_else(|| idx("open_time")).unwrap_or(0);
-    let open_i = idx("open").unwrap_or(1);
-    let high_i = idx("high").unwrap_or(2);
-    let low_i = idx("low").unwrap_or(3);
-    let close_i = idx("close").unwrap_or(4);
+    let ts_i     = idx("timestamp").or_else(|| idx("open_time")).unwrap_or(0);
+    let open_i   = idx("open").unwrap_or(1);
+    let high_i   = idx("high").unwrap_or(2);
+    let low_i    = idx("low").unwrap_or(3);
+    let close_i  = idx("close").unwrap_or(4);
     let volume_i = idx("volume").unwrap_or(5);
     let mut candles = Vec::new();
     for (row_no, line) in lines.enumerate() {
@@ -20,11 +38,11 @@ pub fn load_ohlcv_csv(path: impl AsRef<Path>) -> Result<Vec<Candle>, String> {
         let fields: Vec<&str> = line.split(',').map(str::trim).collect();
         let candle = Candle {
             timestamp: parse_i64(fields.get(ts_i).copied()).unwrap_or(row_no as i64),
-            open: parse_f64(fields.get(open_i).copied())?,
-            high: parse_f64(fields.get(high_i).copied())?,
-            low: parse_f64(fields.get(low_i).copied())?,
-            close: parse_f64(fields.get(close_i).copied())?,
-            volume: parse_f64(fields.get(volume_i).copied()).unwrap_or(0.0),
+            open:      parse_f64(fields.get(open_i).copied())?,
+            high:      parse_f64(fields.get(high_i).copied())?,
+            low:       parse_f64(fields.get(low_i).copied())?,
+            close:     parse_f64(fields.get(close_i).copied())?,
+            volume:    parse_f64(fields.get(volume_i).copied()).unwrap_or(0.0),
         };
         if candle.is_valid() { candles.push(candle); }
     }
@@ -37,5 +55,8 @@ fn parse_i64(value: Option<&str>) -> Option<i64> {
 }
 
 fn parse_f64(value: Option<&str>) -> Result<f64, String> {
-    value.ok_or_else(|| "missing CSV field".to_string())?.parse::<f64>().map_err(|e| format!("invalid number in CSV: {e}"))
+    value
+        .ok_or_else(|| "missing CSV field".to_string())?
+        .parse::<f64>()
+        .map_err(|e| format!("invalid number in CSV: {e}"))
 }

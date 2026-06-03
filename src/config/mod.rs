@@ -1,7 +1,13 @@
 //! ResearchConfig — parsed from config/research.toml.
-//! Timeframe roles are explicit; never inferred from array order.
+//!
+//! Timeframe roles are explicit; never inferred from array order:
+//!   entry_timeframe        = "1m"   (entry & execution)
+//!   screening_timeframe    = "15m"  (regime bias)
+//!   confirmation_timeframe = "5m"   (confirmation)
 
 use std::{fs, path::Path};
+
+use crate::core::{NorthflowError, Timeframe};
 
 #[derive(Debug, Clone)]
 pub struct ResearchConfig {
@@ -102,6 +108,48 @@ impl ResearchConfig {
         }
         cfg
     }
+
+    /// Validate that the three explicit timeframe roles match Phase 2 requirements:
+    ///   entry_timeframe        = "1m"
+    ///   screening_timeframe    = "15m"
+    ///   confirmation_timeframe = "5m"
+    ///
+    /// Returns `Err` if any value is unparseable or assigned to the wrong role.
+    pub fn validate_timeframes(&self) -> Result<(), NorthflowError> {
+        let entry = Timeframe::from_str(&self.entry_timeframe).map_err(|e| {
+            NorthflowError::ConfigError(format!("entry_timeframe invalid: {e}"))
+        })?;
+        let screening = Timeframe::from_str(&self.screening_timeframe).map_err(|e| {
+            NorthflowError::ConfigError(format!("screening_timeframe invalid: {e}"))
+        })?;
+        let confirmation = Timeframe::from_str(&self.confirmation_timeframe).map_err(|e| {
+            NorthflowError::ConfigError(format!("confirmation_timeframe invalid: {e}"))
+        })?;
+
+        if entry != Timeframe::OneMinute {
+            return Err(NorthflowError::ConfigError(format!(
+                "entry_timeframe must be '1m', got '{}'. \
+                 Northflow Phase 2 expects: entry=1m, screening=15m, confirmation=5m",
+                self.entry_timeframe
+            )));
+        }
+        if screening != Timeframe::FifteenMinute {
+            return Err(NorthflowError::ConfigError(format!(
+                "screening_timeframe must be '15m', got '{}'. \
+                 Northflow Phase 2 expects: entry=1m, screening=15m, confirmation=5m",
+                self.screening_timeframe
+            )));
+        }
+        if confirmation != Timeframe::FiveMinute {
+            return Err(NorthflowError::ConfigError(format!(
+                "confirmation_timeframe must be '5m', got '{}'. \
+                 Northflow Phase 2 expects: entry=1m, screening=15m, confirmation=5m",
+                self.confirmation_timeframe
+            )));
+        }
+
+        Ok(())
+    }
 }
 
 fn parse_string_array(value: &str) -> Vec<String> {
@@ -116,4 +164,63 @@ fn parse_string_array(value: &str) -> Vec<String> {
 
 fn parse_f64(value: &str, default: f64) -> f64 {
     value.trim().parse::<f64>().unwrap_or(default)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_cfg() -> ResearchConfig {
+        ResearchConfig::default()
+    }
+
+    #[test]
+    fn valid_explicit_timeframe_config_passes() {
+        let cfg = default_cfg();
+        assert!(cfg.validate_timeframes().is_ok());
+    }
+
+    #[test]
+    fn invalid_entry_timeframe_string_fails() {
+        let mut cfg = default_cfg();
+        cfg.entry_timeframe = "4h".to_string();
+        let err = cfg.validate_timeframes().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("entry_timeframe"), "expected mention of field: {msg}");
+    }
+
+    #[test]
+    fn invalid_screening_timeframe_string_fails() {
+        let mut cfg = default_cfg();
+        cfg.screening_timeframe = "badval".to_string();
+        assert!(cfg.validate_timeframes().is_err());
+    }
+
+    #[test]
+    fn wrong_entry_timeframe_role_fails() {
+        let mut cfg = default_cfg();
+        cfg.entry_timeframe = "15m".to_string(); // wrong: entry must be 1m
+        let err = cfg.validate_timeframes().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("entry=1m"),
+            "error should mention expected roles: {msg}"
+        );
+    }
+
+    #[test]
+    fn wrong_screening_timeframe_role_fails() {
+        let mut cfg = default_cfg();
+        cfg.screening_timeframe = "1m".to_string(); // wrong: screening must be 15m
+        let err = cfg.validate_timeframes().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("entry=1m"), "error should list expected roles: {msg}");
+    }
+
+    #[test]
+    fn wrong_confirmation_timeframe_role_fails() {
+        let mut cfg = default_cfg();
+        cfg.confirmation_timeframe = "1h".to_string(); // wrong: confirmation must be 5m
+        assert!(cfg.validate_timeframes().is_err());
+    }
 }
