@@ -52,6 +52,8 @@ After `cargo run -- research --config config/research.toml` with valid historica
 | `reports/attribution_by_filter.csv` | Win rate, PnL, edge per passed or failed strategy filter |
 | `reports/audit_report.json` | Audit validation result — errors, warnings, and per-trade issues |
 | `reports/report_manifest.json` | Deterministic list of all generated files with row counts |
+| `reports/risk_rejections.csv` | Every rejected signal reason with stage, equity, drawdown, and expected edge/cost context |
+| `reports/signal_flow_summary.json` | Signal funnel counts: generated, preapproved, rejected, opened, and closed |
 
 Attribution CSV files share a stable header:
 
@@ -62,6 +64,25 @@ key,trades,wins,losses,win_rate,net_pnl,gross_pnl,total_fee,total_slippage,avg_n
 Filter bucket keys:
 - `passed:<filter_name>` — strategy filters that approved the signal
 - `failed:<filter_name>` — strategy filters that rejected the signal
+
+### Risk rejection attribution
+
+`risk_rejections.csv` explains why signals did not become trades.
+
+The `stage` column can be:
+
+- `initial_risk` — rejected at signal close before a pending entry is created.
+- `actual_entry` — initially approved, then rejected after the engine recalculates risk using actual next-candle open entry price.
+
+Normal RiskEngine rejections use `RiskAssessment.expected_reward_bps`, `RiskAssessment.expected_cost_bps`, and `RiskAssessment.expected_net_edge_bps` so the rejection reason and edge fields match.
+
+`signal_flow_summary.json` summarizes the funnel:
+
+```
+signal generated → preapproved → rejected at initial risk / rejected at actual entry → trade opened → trade closed
+```
+
+`trades.csv` reward_risk is the effective reward/risk at the simulated entry fill price.
 
 ### Audit validation
 

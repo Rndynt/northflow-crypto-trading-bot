@@ -234,7 +234,16 @@ reports/attribution_by_side.csv
 reports/attribution_by_filter.csv
 reports/audit_report.json
 reports/report_manifest.json
+reports/risk_rejections.csv
+reports/signal_flow_summary.json
 ```
+
+For large datasets, if the strategy opens no trades, inspect:
+
+- `reports/signal_flow_summary.json`
+- `reports/risk_rejections.csv`
+
+These files show whether signals were rejected by initial risk checks or actual-entry re-risking.
 
 ---
 

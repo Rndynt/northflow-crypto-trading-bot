@@ -11,9 +11,15 @@
 /// One risk rejection record.
 ///
 /// A single signal that fails N guards produces N rows, one per failed guard.
+///
+/// The `stage` field identifies where in the engine loop the rejection occurred:
+/// - `"initial_risk"` — rejected at signal-candle close before a pending entry is queued.
+/// - `"actual_entry"` — initially preapproved, then rejected when re-risked using the real
+///   next-candle open fill price (including adverse slippage).
 #[derive(Debug, Clone)]
 pub struct RiskRejection {
     pub signal_id: String,
+    pub stage: String,
     pub timestamp: i64,
     pub side: String,
     pub regime: String,
@@ -88,8 +94,13 @@ mod tests {
     use super::*;
 
     fn make_rejection(reason: &str) -> RiskRejection {
+        make_rejection_with_stage(reason, "initial_risk")
+    }
+
+    fn make_rejection_with_stage(reason: &str, stage: &str) -> RiskRejection {
         RiskRejection {
             signal_id: "SIG-BT-00000001".to_string(),
+            stage: stage.to_string(),
             timestamp: 1_700_000_000_000,
             side: "long".to_string(),
             regime: "bullish".to_string(),
@@ -102,6 +113,15 @@ mod tests {
             expected_cost_bps: 8.0,
             expected_net_edge_bps: 192.0,
         }
+    }
+
+    #[test]
+    fn risk_rejection_has_stage() {
+        let r = make_rejection_with_stage("max_drawdown_reached", "initial_risk");
+        assert_eq!(r.stage, "initial_risk");
+
+        let r2 = make_rejection_with_stage("reward_risk_below_minimum", "actual_entry");
+        assert_eq!(r2.stage, "actual_entry");
     }
 
     #[test]

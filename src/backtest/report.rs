@@ -164,15 +164,16 @@ impl ReportWriter {
         let path = dir.join("risk_rejections.csv");
         let mut rows: Vec<String> = Vec::with_capacity(rejections.len() + 1);
         rows.push(
-            "signal_id,timestamp,side,regime,reason,equity,peak_equity,\
+            "signal_id,stage,timestamp,side,regime,reason,equity,peak_equity,\
              drawdown_pct,daily_realized_pnl,expected_reward_bps,\
              expected_cost_bps,expected_net_edge_bps"
                 .to_string(),
         );
         for r in rejections {
             rows.push(format!(
-                "{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}",
+                "{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}",
                 csv_escape(&r.signal_id),
+                csv_escape(&r.stage),
                 r.timestamp,
                 csv_escape(&r.side),
                 csv_escape(&r.regime),
@@ -322,6 +323,7 @@ mod tests {
     fn test_rejection() -> RiskRejection {
         RiskRejection {
             signal_id: "SIG-BT-00000001".to_string(),
+            stage: "initial_risk".to_string(),
             timestamp: 1_700_000_000_000,
             side: "long".to_string(),
             regime: "bullish".to_string(),
@@ -466,10 +468,11 @@ mod tests {
         .unwrap();
         let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         assert!(
-            content.contains("signal_id,timestamp,side,regime,reason"),
+            content.contains("signal_id,stage,timestamp,side,regime,reason"),
             "header missing: {content}"
         );
         assert!(content.contains("SIG-BT-00000001"), "signal_id missing");
+        assert!(content.contains("initial_risk"), "stage missing");
         assert!(content.contains("max_drawdown_reached"), "reason missing");
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -488,7 +491,7 @@ mod tests {
         .unwrap();
         let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         assert!(
-            content.contains("signal_id,timestamp,side,regime,reason"),
+            content.contains("signal_id,stage,timestamp,side,regime,reason"),
             "header missing for empty file: {content}"
         );
         // Only header, no data rows
@@ -541,6 +544,7 @@ mod tests {
         let dir = temp_dir("rrejections_escape");
         let r = RiskRejection {
             signal_id: "SIG-BT-00000001".to_string(),
+            stage: "initial_risk".to_string(),
             timestamp: 1_700_000_000_000,
             side: "long".to_string(),
             regime: "bull,ish".to_string(), // contains comma — must be escaped
@@ -576,5 +580,119 @@ mod tests {
         assert_eq!(csv_escape("a,b"), "\"a,b\"");
         assert_eq!(csv_escape("say \"hi\""), "\"say \"\"hi\"\"\"");
         assert_eq!(csv_escape("line\nbreak"), "\"line\nbreak\"");
+    }
+
+    #[test]
+    fn writes_risk_rejections_csv_with_stage_header() {
+        let dir = temp_dir("stage_header");
+        ReportWriter::write_all(
+            &dir,
+            &test_summary(),
+            &[],
+            &[],
+            &[test_rejection()],
+            &SignalFlowSummary::default(),
+        )
+        .unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
+        let header = content.lines().next().unwrap_or("");
+        assert!(
+            header.starts_with("signal_id,stage,"),
+            "stage must be second column in header: {header}"
+        );
+        assert!(
+            header.contains("timestamp"),
+            "header must still have timestamp: {header}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn writes_risk_rejections_csv_stage_value() {
+        let dir = temp_dir("stage_value");
+        let mut actual_entry_rej = test_rejection();
+        actual_entry_rej.stage = "actual_entry".to_string();
+        actual_entry_rej.signal_id = "SIG-BT-00000002".to_string();
+        ReportWriter::write_all(
+            &dir,
+            &test_summary(),
+            &[],
+            &[],
+            &[test_rejection(), actual_entry_rej],
+            &SignalFlowSummary::default(),
+        )
+        .unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
+        assert!(
+            content.contains("initial_risk"),
+            "initial_risk stage must appear in rows: {content}"
+        );
+        assert!(
+            content.contains("actual_entry"),
+            "actual_entry stage must appear in rows: {content}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn writes_empty_risk_rejections_csv_with_stage_header() {
+        let dir = temp_dir("stage_header_empty");
+        ReportWriter::write_all(
+            &dir,
+            &test_summary(),
+            &[],
+            &[],
+            &[],
+            &SignalFlowSummary::default(),
+        )
+        .unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
+        let header = content.lines().next().unwrap_or("");
+        assert!(
+            header.contains("signal_id,stage,timestamp"),
+            "stage must be in header even when no rejections: {header}"
+        );
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(
+            lines.len(),
+            1,
+            "empty rejections should produce only header"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn risk_rejections_csv_escapes_stage() {
+        let dir = temp_dir("stage_escape");
+        let r = RiskRejection {
+            signal_id: "SIG-BT-00000001".to_string(),
+            stage: "initial,risk".to_string(), // comma must be escaped
+            timestamp: 1_700_000_000_000,
+            side: "long".to_string(),
+            regime: "bullish".to_string(),
+            reason: "max_drawdown_reached".to_string(),
+            equity: 9_500.0,
+            peak_equity: 10_000.0,
+            drawdown_pct: 5.0,
+            daily_realized_pnl: -100.0,
+            expected_reward_bps: 200.0,
+            expected_cost_bps: 8.0,
+            expected_net_edge_bps: 192.0,
+        };
+        ReportWriter::write_all(
+            &dir,
+            &test_summary(),
+            &[],
+            &[],
+            &[r],
+            &SignalFlowSummary::default(),
+        )
+        .unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
+        assert!(
+            content.contains("\"initial,risk\""),
+            "comma in stage must be CSV-escaped: {content}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

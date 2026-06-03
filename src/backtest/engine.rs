@@ -205,6 +205,7 @@ impl BacktestEngine {
                         signal_flow.signals_rejected_actual_entry += 1;
                         risk_rejections.push(build_rejection(
                             &adjusted,
+                            "actual_entry",
                             candle.timestamp,
                             equity,
                             peak_equity,
@@ -228,6 +229,7 @@ impl BacktestEngine {
                                 signal_flow.signals_rejected_actual_entry += 1;
                                 risk_rejections.push(build_rejection(
                                     &adjusted,
+                                    "actual_entry",
                                     candle.timestamp,
                                     equity,
                                     peak_equity,
@@ -244,14 +246,15 @@ impl BacktestEngine {
                                 for reason in &assessment.failed {
                                     risk_rejections.push(build_rejection(
                                         &adjusted,
+                                        "actual_entry",
                                         candle.timestamp,
                                         equity,
                                         peak_equity,
                                         daily_realized_pnl,
                                         reason,
-                                        adjusted.expected_reward_bps,
-                                        adjusted.estimated_cost_bps,
-                                        adjusted.expected_net_edge_bps,
+                                        assessment.expected_reward_bps,
+                                        assessment.expected_cost_bps,
+                                        assessment.expected_net_edge_bps,
                                     ));
                                 }
                             }
@@ -380,14 +383,15 @@ impl BacktestEngine {
                                     for reason in &assessment.failed {
                                         risk_rejections.push(build_rejection(
                                             &signal,
+                                            "initial_risk",
                                             candle.timestamp,
                                             equity,
                                             peak_equity,
                                             daily_realized_pnl,
                                             reason,
-                                            signal.expected_reward_bps,
-                                            signal.estimated_cost_bps,
-                                            signal.expected_net_edge_bps,
+                                            assessment.expected_reward_bps,
+                                            assessment.expected_cost_bps,
+                                            assessment.expected_net_edge_bps,
                                         ));
                                     }
                                 }
@@ -581,6 +585,7 @@ fn adjusted_signal_for_actual_entry(signal: &Signal, actual_entry_price: f64) ->
 
 fn build_rejection(
     signal: &Signal,
+    stage: &str,
     timestamp: i64,
     equity: f64,
     peak_equity: f64,
@@ -597,6 +602,7 @@ fn build_rejection(
     };
     RiskRejection {
         signal_id: signal.signal_id.as_str().to_string(),
+        stage: stage.to_string(),
         timestamp,
         side: signal.side.as_str().to_string(),
         regime: signal.regime.clone(),
@@ -1266,5 +1272,143 @@ mod tests {
         );
 
         std::fs::remove_file(&path).ok();
+    }
+
+    // ── stage / assessment-field tests ────────────────────────────────────────
+
+    #[test]
+    fn initial_risk_rejection_stage_is_initial_risk() {
+        let signal = long_signal();
+        let rej = build_rejection(
+            &signal,
+            "initial_risk",
+            signal.entry_time,
+            10_000.0,
+            10_000.0,
+            0.0,
+            "reward_risk_below_minimum",
+            signal.expected_reward_bps,
+            signal.estimated_cost_bps,
+            signal.expected_net_edge_bps,
+        );
+        assert_eq!(rej.stage, "initial_risk");
+    }
+
+    #[test]
+    fn actual_entry_rejection_stage_is_actual_entry() {
+        let signal = long_signal();
+        let rej = build_rejection(
+            &signal,
+            "actual_entry",
+            signal.entry_time,
+            10_000.0,
+            10_000.0,
+            0.0,
+            "expected_net_edge_not_positive",
+            signal.expected_reward_bps,
+            signal.estimated_cost_bps,
+            signal.expected_net_edge_bps,
+        );
+        assert_eq!(rej.stage, "actual_entry");
+    }
+
+    #[test]
+    fn initial_risk_rejection_uses_assessment_cost_fields() {
+        let signal = long_signal();
+        let risk_cfg = RiskConfig {
+            risk_per_trade_pct: 1.0,
+            max_open_positions: 1,
+            max_leverage: 5.0,
+            min_reward_risk: 1.5,
+            max_daily_loss_pct: 2.0,
+            max_drawdown_pct: 10.0,
+        };
+        let cost_cfg = default_cost_cfg();
+        // Reject via max_open_positions so we get a clean assessment with cost fields.
+        let risk_ctx = RiskContext {
+            equity: 10_000.0,
+            peak_equity: 10_000.0,
+            daily_realized_pnl: 0.0,
+            open_positions: 1, // at max — will reject
+        };
+        let assessment = RiskEngine::assess(&risk_cfg, &cost_cfg, &risk_ctx, &signal).unwrap();
+        assert!(
+            !assessment.approved,
+            "expected rejection for max_open_positions"
+        );
+
+        // assessment.expected_cost_bps comes from the cost model (total_adverse_cost_bps),
+        // which sums taker fees, spread, slippage, market impact, and stop slippage.
+        // With default_cost_cfg() this is > signal.estimated_cost_bps (8.0).
+        assert!(
+            (assessment.expected_cost_bps - signal.estimated_cost_bps).abs() > 1e-9,
+            "assessment cost should differ from stale signal cost so the test is meaningful"
+        );
+
+        // The rejection built with assessment fields must use assessment values, not signal values.
+        let rej = build_rejection(
+            &signal,
+            "initial_risk",
+            signal.entry_time,
+            risk_ctx.equity,
+            risk_ctx.peak_equity,
+            risk_ctx.daily_realized_pnl,
+            "max_open_positions",
+            assessment.expected_reward_bps,
+            assessment.expected_cost_bps,
+            assessment.expected_net_edge_bps,
+        );
+        assert!(
+            (rej.expected_cost_bps - assessment.expected_cost_bps).abs() < 1e-9,
+            "rejection must carry assessment.expected_cost_bps={}, got {}",
+            assessment.expected_cost_bps,
+            rej.expected_cost_bps
+        );
+        assert!(
+            (rej.expected_net_edge_bps - assessment.expected_net_edge_bps).abs() < 1e-9,
+            "rejection must carry assessment.expected_net_edge_bps={}, got {}",
+            assessment.expected_net_edge_bps,
+            rej.expected_net_edge_bps
+        );
+    }
+
+    #[test]
+    fn actual_entry_risk_rejection_uses_assessment_cost_fields() {
+        let signal = long_signal();
+        let risk_cfg = RiskConfig {
+            risk_per_trade_pct: 1.0,
+            max_open_positions: 1,
+            max_leverage: 5.0,
+            min_reward_risk: 1.5,
+            max_daily_loss_pct: 2.0,
+            max_drawdown_pct: 10.0,
+        };
+        let cost_cfg = default_cost_cfg();
+        let risk_ctx = RiskContext {
+            equity: 10_000.0,
+            peak_equity: 10_000.0,
+            daily_realized_pnl: 0.0,
+            open_positions: 1, // at max — will reject
+        };
+        let assessment = RiskEngine::assess(&risk_cfg, &cost_cfg, &risk_ctx, &signal).unwrap();
+        assert!(!assessment.approved);
+
+        let rej = build_rejection(
+            &signal,
+            "actual_entry",
+            signal.entry_time,
+            risk_ctx.equity,
+            risk_ctx.peak_equity,
+            risk_ctx.daily_realized_pnl,
+            "max_open_positions",
+            assessment.expected_reward_bps,
+            assessment.expected_cost_bps,
+            assessment.expected_net_edge_bps,
+        );
+        assert_eq!(rej.stage, "actual_entry");
+        assert!(
+            (rej.expected_cost_bps - assessment.expected_cost_bps).abs() < 1e-9,
+            "actual_entry rejection must carry assessment cost, not stale signal cost"
+        );
     }
 }
