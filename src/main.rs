@@ -1,6 +1,6 @@
 //! Northflow CLI entry point.
 //!
-//! research  — Phase 4: strategy engine ready; data summary active.
+//! research  — Phase 5: risk and cost model ready; data summary active.
 //! paper     — DISABLED until research engine validated.
 //! live      — DISABLED until paper/live parity proven.
 
@@ -47,7 +47,10 @@ fn print_help() {
     println!("  northflow paper   # disabled — research engine not yet validated");
     println!("  northflow live    # disabled — paper/live parity not yet proven");
     println!();
-    println!("Phase 4: strategy engine ready (screened_vwap_scalp).");
+    println!("Phase 5: risk and cost model ready.");
+    println!("         Strategy output: Signal only.");
+    println!("         Risk output: RiskAssessment only.");
+    println!("         No orders, no fills, no backtest execution.");
     println!("         Place 1m CSV data in data/historical/<SYMBOL>.csv");
     println!("         Columns: timestamp,open,high,low,close,volume");
     println!("         Alternative timestamp column: open_time");
