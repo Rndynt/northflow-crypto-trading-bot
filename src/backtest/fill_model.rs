@@ -422,6 +422,62 @@ mod tests {
         assert_eq!(exit.unwrap().reason, TradeExitReason::TimeExit);
     }
 
+    // ── Same-candle exit (bars_held = 0) — entry candle can trigger SL/TP ──────
+
+    #[test]
+    fn fill_model_can_exit_on_entry_candle_long_stop_loss() {
+        // bars_held=0 simulates the entry candle: low touches SL
+        let pos = open_long(0);
+        let candle = make_candle(1_700_000_060_000, 30_000.0, 30_050.0, 29_650.0, 29_900.0);
+        let exit = FillModel::check_exit(&pos, &candle, true, 2.0, 4.0, 60);
+        assert!(exit.is_some(), "SL must fire on entry candle (bars_held=0)");
+        assert_eq!(exit.unwrap().reason, TradeExitReason::StopLoss);
+    }
+
+    #[test]
+    fn fill_model_can_exit_on_entry_candle_long_take_profit() {
+        // bars_held=0 simulates the entry candle: high touches TP
+        let pos = open_long(0);
+        let candle = make_candle(1_700_000_060_000, 30_000.0, 30_650.0, 29_950.0, 30_600.0);
+        let exit = FillModel::check_exit(&pos, &candle, true, 2.0, 4.0, 60);
+        assert!(exit.is_some(), "TP must fire on entry candle (bars_held=0)");
+        assert_eq!(exit.unwrap().reason, TradeExitReason::TakeProfit);
+    }
+
+    #[test]
+    fn fill_model_can_exit_on_entry_candle_short_stop_loss() {
+        // bars_held=0 simulates the entry candle: high touches SL for short
+        let pos = open_short(0);
+        let candle = make_candle(1_700_000_060_000, 30_000.0, 30_350.0, 29_950.0, 30_200.0);
+        let exit = FillModel::check_exit(&pos, &candle, true, 2.0, 4.0, 60);
+        assert!(exit.is_some(), "SL must fire on entry candle (bars_held=0)");
+        assert_eq!(exit.unwrap().reason, TradeExitReason::StopLoss);
+    }
+
+    #[test]
+    fn fill_model_can_exit_on_entry_candle_short_take_profit() {
+        // bars_held=0 simulates the entry candle: low touches TP for short
+        let pos = open_short(0);
+        let candle = make_candle(1_700_000_060_000, 30_000.0, 30_050.0, 29_350.0, 29_500.0);
+        let exit = FillModel::check_exit(&pos, &candle, true, 2.0, 4.0, 60);
+        assert!(exit.is_some(), "TP must fire on entry candle (bars_held=0)");
+        assert_eq!(exit.unwrap().reason, TradeExitReason::TakeProfit);
+    }
+
+    #[test]
+    fn fill_model_entry_candle_both_sl_tp_assumes_stop_first() {
+        // bars_held=0: both SL and TP touched — conservative rule applies
+        let pos = open_long(0);
+        let candle = make_candle(1_700_000_060_000, 30_000.0, 30_650.0, 29_650.0, 30_100.0);
+        let exit = FillModel::check_exit(&pos, &candle, true, 2.0, 4.0, 60);
+        assert!(exit.is_some(), "must exit when both SL and TP touched");
+        assert_eq!(
+            exit.unwrap().reason,
+            TradeExitReason::StopLoss,
+            "conservative intrabar: SL assumed first on entry candle"
+        );
+    }
+
     // ── End-of-backtest ───────────────────────────────────────────────────────
 
     #[test]

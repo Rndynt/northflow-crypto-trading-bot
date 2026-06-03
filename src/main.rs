@@ -1,7 +1,7 @@
 //! Northflow CLI entry point.
 //!
-//! research  — Phase 5: risk and cost model ready; data summary active.
-//! paper     — DISABLED until research engine validated.
+//! research  — Phase 6: deterministic backtest engine ready.
+//! paper     — DISABLED until research engine validated for paper.
 //! live      — DISABLED until paper/live parity proven.
 
 use northflow_crypto_trading_bot::{config::ResearchConfig, research::run_research};
@@ -24,7 +24,9 @@ fn real_main() -> Result<(), String> {
             let cfg = ResearchConfig::load(&config_path)?;
             run_research(&cfg)
         }
-        "paper" => Err("paper mode is disabled — research engine not yet validated".to_string()),
+        "paper" => {
+            Err("paper mode is disabled — research engine not yet validated for paper".to_string())
+        }
         "live" => Err("live mode is disabled — paper/live parity not yet proven".to_string()),
         _ => {
             print_help();
@@ -44,13 +46,15 @@ fn print_help() {
     println!();
     println!("Usage:");
     println!("  northflow research [--config config/research.toml]");
-    println!("  northflow paper   # disabled — research engine not yet validated");
+    println!("  northflow paper   # disabled — research engine not yet validated for paper");
     println!("  northflow live    # disabled — paper/live parity not yet proven");
     println!();
-    println!("Phase 5: risk and cost model ready.");
-    println!("         Strategy output: Signal only.");
-    println!("         Risk output: RiskAssessment only.");
-    println!("         No orders, no fills, no backtest execution.");
+    println!("Phase 6: deterministic backtest engine ready.");
+    println!("         Backtest output: simulated Trade records only.");
+    println!(
+        "         Reports: reports/backtest_summary.json, reports/trades.csv, reports/equity_curve.csv"
+    );
+    println!("         No live orders, no paper trading, no exchange calls.");
     println!("         Place 1m CSV data in data/historical/<SYMBOL>.csv");
     println!("         Columns: timestamp,open,high,low,close,volume");
     println!("         Alternative timestamp column: open_time");

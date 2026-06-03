@@ -2,7 +2,7 @@
 
 A pure Rust CLI and library for deterministic, research-first crypto strategy backtesting.
 
-## Current phase: Phase 5 — Risk and Cost Model ✓
+## Current phase: Phase 6 — Backtest Engine ✓
 
 | Phase | Status |
 |---|---|
@@ -10,11 +10,41 @@ A pure Rust CLI and library for deterministic, research-first crypto strategy ba
 | Phase 2 — Market Data (OHLCV loader, timeframe builder, data quality) | ✅ Complete |
 | Phase 3 — Indicators (EMA 8/21/50/200, ATR 14, VWAP, Volume SMA 20) | ✅ Complete |
 | Phase 4 — Strategy Engine (screened_vwap_scalp) | ✅ Complete |
-| Phase 5 — Risk & Cost model | ✅ Implemented |
-| Phase 6 — Backtest engine | ⏳ Pending |
+| Phase 5 — Risk & Cost model | ✅ Complete |
+| Phase 6 — Backtest engine | ✅ Implemented |
 | Phase 7 — Reports & Attribution | ⏳ Pending |
 
 See `docs/ROADMAP.md` for full roadmap and architecture decisions.
+
+---
+
+## Phase 6 backtest engine
+
+Phase 6 is a deterministic historical simulation only. It does not claim profitability and does not give trading advice.
+
+**Backtest output: simulated `Trade` records only.**  
+No live orders. No paper trading. No exchange calls. No LLM trading decisions.
+
+The `research` command writes:
+
+```
+reports/backtest_summary.json
+reports/trades.csv
+reports/equity_curve.csv
+```
+
+### Execution rules
+
+- Entry is simulated at the **next 1m candle open** after signal generation.
+- **No-lookahead rule**: 5m and 15m candles are only used once they are fully closed and their close time is strictly before the current 1m candle's signal time.
+- **Conservative intrabar rule**: if stop-loss and take-profit are both touched in the same candle, stop-loss is assumed to have been hit first.
+- After entry at the next candle open, SL/TP checks run on that same entry candle.
+- No new strategy signal is evaluated on the candle where an entry was just opened.
+- Paper and live modes remain disabled. No exchange calls. No LLM trading decisions.
+
+### Phase 7 attribution
+
+Phase 7 reports and attribution is still pending. Current report files contain raw trade data but advanced attribution analysis is not yet implemented.
 
 ---
 
@@ -59,8 +89,6 @@ qty                 = min(qty_by_risk, max_qty_by_leverage)
 
 Normal guard rejection returns `Ok(RiskAssessment { approved: false, .. })`.  
 Invalid input (bad signal geometry, invalid equity) returns `Err(NorthflowError)`.
-
-Paper and live modes remain disabled. No order creation. No fill simulation. No backtest execution.
 
 ---
 
@@ -198,15 +226,15 @@ Invalid candles are rejected and recorded in the data quality report. No silent 
 ### Paper and live modes are disabled
 
 ```
-northflow paper   # exits with error — research engine not yet validated
-northflow live    # exits with error — research engine not yet validated
+northflow paper   # exits with error — research engine not yet validated for paper
+northflow live    # exits with error — paper/live parity not yet proven
 ```
 
 These modes will be enabled only after the research engine produces validated, truthful backtest results.
 
 ### No fake backtest results
 
-`cargo run -- research` prints a truthful market data + indicator + strategy readiness summary. It does not claim profitability or generate fake trades.
+`cargo run -- research` runs the deterministic backtest engine and writes truthful report files. It does not claim profitability or generate fake trades.
 
 ### Legacy code is reference-only
 
@@ -258,10 +286,11 @@ northflow-crypto-trading-bot/
 │   │   ├── regime.rs       — MarketRegime enum + classify_screening_regime()
 │   │   └── screened_vwap_scalp.rs — ScreenedVwapScalp strategy
 │   ├── config/             — ResearchConfig (parsed from TOML, no serde)
-│   ├── risk/               — Phase 5 placeholder (sizing + drawdown guards)
-│   ├── execution/          — Phase 6 placeholder (SimExecutor)
+│   ├── risk/               — Phase 5: position sizing + cost model + risk guards
+│   ├── backtest/           — Phase 6: deterministic replay engine + fill model + reports
 │   ├── research/           — Research CLI orchestrator
-│   ├── report/             — Phase 7 placeholder (JSON + CSV writers)
+│   ├── execution/          — placeholder (not active)
+│   ├── report/             — Phase 7 placeholder (not active)
 │   ├── journal/            — placeholder (not active)
 │   └── advisor/            — placeholder (not active)
 ├── config/
@@ -271,7 +300,7 @@ northflow-crypto-trading-bot/
 ├── legacy/
 │   ├── README.md           — legacy boundary rules
 │   └── aria/               — previous code (reference only, never imported)
-└── reports/                — Phase 7 output (not generated yet)
+└── reports/                — backtest output (backtest_summary.json, trades.csv, equity_curve.csv)
 ```
 
 ---
@@ -282,10 +311,10 @@ northflow-crypto-trading-bot/
 # Build
 cargo build --release
 
-# Phase 4 research summary (needs data/historical/BTCUSDT.csv for symbol data)
+# Run backtest (needs data/historical/BTCUSDT.csv)
 cargo run -- research --config config/research.toml
 
-# Run all unit tests (Phase 1 + Phase 2 + Phase 3 + Phase 4)
+# Run all unit tests
 cargo test
 
 # Print help
@@ -295,30 +324,26 @@ cargo run -- help
 ### Example output (no CSV file)
 
 ```
-Northflow — Phase 4: Strategy Engine
+=================================================================
+ Northflow — Phase 6: Backtest Engine
+=================================================================
 
   Timeframe model:
     entry_timeframe        = "1m"  (1m  → entry & execution)
     screening_timeframe    = "15m" (15m → regime bias)
     confirmation_timeframe = "5m"  (5m  → confirmation)
 
-No historical CSV found for BTCUSDT.
-Expected path: data/historical/BTCUSDT.csv
-Place a 1m OHLCV CSV file with columns:
-  timestamp,open,high,low,close,volume
+  paper mode  DISABLED — research engine not yet validated for paper
+  live mode   DISABLED — paper/live parity not yet proven
 
-Indicators ready:
-  EMA 8 / 21 / 50 / 200
-  ATR 14 (Wilder smoothing)
-  VWAP (session-cumulative)
-  Volume SMA 20
+  Note: backtest results are historical simulation only.
+        Do not use as financial advice or profitability claims.
 
-Strategy engine ready:
-  screened_vwap_scalp
-  Output: Signal only
-  No orders, no risk sizing, no backtest execution
-
-Next: Phase 5 — risk and cost model
+Symbol: BTCUSDT
+  No historical CSV found.
+  Expected path: data/historical/BTCUSDT.csv
+  Place a 1m OHLCV CSV file with columns:
+    timestamp,open,high,low,close,volume
 ```
 
 ---
