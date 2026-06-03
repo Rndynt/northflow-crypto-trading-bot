@@ -560,9 +560,7 @@ fn build_trade(
 fn adjusted_signal_for_actual_entry(signal: &Signal, actual_entry_price: f64) -> Signal {
     let expected_reward_bps = if actual_entry_price > 0.0 {
         match signal.side {
-            Side::Long => {
-                (signal.take_profit - actual_entry_price) / actual_entry_price * 10_000.0
-            }
+            Side::Long => (signal.take_profit - actual_entry_price) / actual_entry_price * 10_000.0,
             Side::Short => {
                 (actual_entry_price - signal.take_profit) / actual_entry_price * 10_000.0
             }
@@ -1248,10 +1246,16 @@ mod tests {
 
         // New fields must be present and internally consistent.
         let flow = &result.signal_flow;
-        assert_eq!(flow.trades_closed, result.trades.len(),
-            "signal_flow.trades_closed must equal trades.len()");
-        assert_eq!(flow.risk_rejections, result.risk_rejections.len(),
-            "signal_flow.risk_rejections must equal risk_rejections.len()");
+        assert_eq!(
+            flow.trades_closed,
+            result.trades.len(),
+            "signal_flow.trades_closed must equal trades.len()"
+        );
+        assert_eq!(
+            flow.risk_rejections,
+            result.risk_rejections.len(),
+            "signal_flow.risk_rejections must equal risk_rejections.len()"
+        );
         assert!(
             flow.signals_preapproved >= flow.trades_opened,
             "trades_opened must not exceed preapproved signals"

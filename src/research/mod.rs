@@ -142,17 +142,38 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
             let flow = &result.signal_flow;
             println!("  Signal flow:");
             println!("    signals generated:          {}", flow.signals_generated);
-            println!("    signals preapproved:        {}", flow.signals_preapproved);
-            println!("    rejected initial risk:      {}", flow.signals_rejected_initial_risk);
-            println!("    rejected actual entry:      {}", flow.signals_rejected_actual_entry);
+            println!(
+                "    signals preapproved:        {}",
+                flow.signals_preapproved
+            );
+            println!(
+                "    rejected initial risk:      {}",
+                flow.signals_rejected_initial_risk
+            );
+            println!(
+                "    rejected actual entry:      {}",
+                flow.signals_rejected_actual_entry
+            );
             println!("    trades opened:              {}", flow.trades_opened);
             println!("    trades closed:              {}", flow.trades_closed);
             println!("    risk rejection rows:        {}", flow.risk_rejections);
             if flow.risk_rejections > 0 {
-                println!("      max_drawdown:             {}", flow.rejections_max_drawdown);
-                println!("      daily_loss:               {}", flow.rejections_daily_loss);
-                println!("      reward_risk:              {}", flow.rejections_reward_risk);
-                println!("      expected_net_edge:        {}", flow.rejections_expected_net_edge);
+                println!(
+                    "      max_drawdown:             {}",
+                    flow.rejections_max_drawdown
+                );
+                println!(
+                    "      daily_loss:               {}",
+                    flow.rejections_daily_loss
+                );
+                println!(
+                    "      reward_risk:              {}",
+                    flow.rejections_reward_risk
+                );
+                println!(
+                    "      expected_net_edge:        {}",
+                    flow.rejections_expected_net_edge
+                );
                 println!("      other:                    {}", flow.rejections_other);
             }
             println!();

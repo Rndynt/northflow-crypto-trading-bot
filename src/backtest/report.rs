@@ -464,8 +464,7 @@ mod tests {
             &SignalFlowSummary::default(),
         )
         .unwrap();
-        let content =
-            std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         assert!(
             content.contains("signal_id,timestamp,side,regime,reason"),
             "header missing: {content}"
@@ -487,15 +486,18 @@ mod tests {
             &SignalFlowSummary::default(),
         )
         .unwrap();
-        let content =
-            std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         assert!(
             content.contains("signal_id,timestamp,side,regime,reason"),
             "header missing for empty file: {content}"
         );
         // Only header, no data rows
         let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 1, "empty rejections should produce only header");
+        assert_eq!(
+            lines.len(),
+            1,
+            "empty rejections should produce only header"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -513,21 +515,24 @@ mod tests {
         flow.rejections_daily_loss = 1;
         flow.rejections_other = 1;
 
-        ReportWriter::write_all(
-            &dir,
-            &test_summary(),
-            &[],
-            &[],
-            &[],
-            &flow,
-        )
-        .unwrap();
-        let content =
-            std::fs::read_to_string(format!("{dir}/signal_flow_summary.json")).unwrap();
-        assert!(content.contains("\"signals_generated\": 10"), "missing signals_generated");
-        assert!(content.contains("\"signals_preapproved\": 8"), "missing signals_preapproved");
-        assert!(content.contains("\"trades_opened\": 7"), "missing trades_opened");
-        assert!(content.contains("\"risk_rejections\": 3"), "missing risk_rejections");
+        ReportWriter::write_all(&dir, &test_summary(), &[], &[], &[], &flow).unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/signal_flow_summary.json")).unwrap();
+        assert!(
+            content.contains("\"signals_generated\": 10"),
+            "missing signals_generated"
+        );
+        assert!(
+            content.contains("\"signals_preapproved\": 8"),
+            "missing signals_preapproved"
+        );
+        assert!(
+            content.contains("\"trades_opened\": 7"),
+            "missing trades_opened"
+        );
+        assert!(
+            content.contains("\"risk_rejections\": 3"),
+            "missing risk_rejections"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -557,8 +562,7 @@ mod tests {
             &SignalFlowSummary::default(),
         )
         .unwrap();
-        let content =
-            std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/risk_rejections.csv")).unwrap();
         assert!(
             content.contains("\"bull,ish\""),
             "comma in regime must be CSV-escaped: {content}"

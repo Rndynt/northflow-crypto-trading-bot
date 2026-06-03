@@ -123,7 +123,10 @@ mod tests {
         assert_eq!(flow.rejections_daily_loss, 1);
         assert_eq!(flow.rejections_reward_risk, 1);
         assert_eq!(flow.rejections_expected_net_edge, 1);
-        assert_eq!(flow.rejections_other, 2, "geometry and risk_error rows are 'other'");
+        assert_eq!(
+            flow.rejections_other, 2,
+            "geometry and risk_error rows are 'other'"
+        );
     }
 
     #[test]
