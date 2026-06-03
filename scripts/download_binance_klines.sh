@@ -68,18 +68,25 @@ for ((m=start_num; m<=end_num; m++)); do
   curl -fL "$url" -o "$zip_path"
 
   echo "Converting ${zip_path} -> ${out}"
-  added=$(unzip -p "$zip_path" \
+  unzip -p "$zip_path" \
     | awk -F',' '
         BEGIN { count = 0 }
-        NR == 1 && ($1 == "open_time" || $1 == "timestamp") { next }
-        NF >= 6 && $1 ~ /^[0-9]+$/ {
-          print $1 "," $2 "," $3 "," $4 "," $5 "," $6;
-          count++;
+        {
+          first = $1
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", first)
+          lower = tolower(first)
+        }
+        # Binance monthly CSV files can contain a header row in every ZIP.
+        # Skip header rows wherever they appear, not only NR == 1.
+        lower == "open_time" || lower == "timestamp" { next }
+        NF >= 6 && first ~ /^[0-9]+$/ {
+          print $1 "," $2 "," $3 "," $4 "," $5 "," $6
+          count++
         }
         END { print count > "/dev/stderr" }
       ' \
     2> .northflow_rows_tmp \
-    >> "$out")
+    >> "$out"
 
   month_rows=$(cat .northflow_rows_tmp || echo 0)
   rm -f .northflow_rows_tmp
@@ -87,11 +94,12 @@ for ((m=start_num; m<=end_num; m++)); do
   echo "  rows added: ${month_rows}"
 done
 
-# Remove duplicate timestamps while preserving first occurrence.
+# Remove duplicate timestamps while preserving first occurrence and dropping any
+# accidental non-numeric rows from older/manual conversions.
 tmp="${out}.tmp"
 awk -F',' '
   NR == 1 { print; next }
-  !seen[$1]++ { print }
+  $1 ~ /^[0-9]+$/ && !seen[$1]++ { print }
 ' "$out" > "$tmp"
 mv "$tmp" "$out"
 
