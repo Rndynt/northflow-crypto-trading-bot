@@ -32,3 +32,4 @@ stop_slippage_bps = 5.0
 data_dir = "data/historical"
 reports_dir = "reports"
 conservative_intrabar = true
+max_bars_held = 60

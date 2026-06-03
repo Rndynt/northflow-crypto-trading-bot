@@ -6,6 +6,7 @@ Pure Rust CLI + library. No frontend, no Node.js, no web app.
 
 ```bash
 cargo build --release
+cargo test
 cargo run -- research --config config/research.toml
 cargo run -- help
 ```
@@ -24,28 +25,44 @@ Use the **Build** workflow button to compile.
 src/
 ├── lib.rs          — module exports
 ├── main.rs         — CLI: research | paper (disabled) | live (disabled)
-├── core/           — Candle, Signal, SimTrade, Side
+├── core/           — Candle, Signal, Trade, Side, Position, Symbol, Timeframe
 ├── config/         — ResearchConfig from TOML (no external parser)
-├── data/           — CSV OHLCV loader, flexible header detection
-├── indicators/     — EMA, ATR, VWAP (streaming structs)
-├── strategy/       — ScreenedVwapScalp: EMA crossover + VWAP filter
-├── risk/           — RiskManager: sizing, drawdown, daily loss guards
-├── execution/      — SimExecutor: intrabar SL/TP, conservative fill model
-├── research/       — run_research: per-symbol backtest orchestrator
-├── report/         — RunReport metrics, JSON writer, CSV trade ledger
-├── journal/        — placeholder (disabled)
-└── advisor/        — placeholder (disabled)
+├── market/         — OhlcvLoader, CandleStore, TimeframeBuilder, DataQualityReport
+├── indicators/     — EMA 8/21/50/200, ATR 14, VWAP, VolumeSMA 20; IndicatorEngine
+├── strategy/       — ScreenedVwapScalp: multi-TF EMA crossover + VWAP scalp
+├── risk/           — PositionSizing, CostModel, RiskEngine (guard)
+├── backtest/       — BacktestEngine, FillModel, Metrics, ReportWriter, WalkForward
+├── research/       — run_research: loads CSVs, runs backtest, writes reports
+├── report/         — (legacy placeholder)
+├── execution/      — (placeholder, disabled)
+├── journal/        — (placeholder, disabled)
+└── advisor/        — (placeholder, disabled)
 
 config/research.toml   — default config
-data/historical/       — put <SYMBOL>.csv files here
-reports/               — output: <SYMBOL>_report.json + <SYMBOL>_trades.csv
+data/historical/       — put <SYMBOL>.csv files here (1m OHLCV)
+reports/               — output: backtest_summary.json, trades.csv, equity_curve.csv
 ```
+
+## Implementation status
+
+| Phase | Module | Status |
+|-------|--------|--------|
+| 1 | Core domain types | ✓ complete |
+| 2 | Market data loader + timeframe builder | ✓ complete |
+| 3 | Indicators (EMA, ATR, VWAP, VolumeSMA) | ✓ complete |
+| 4 | Strategy engine (ScreenedVwapScalp) | ✓ complete |
+| 5 | Risk & cost model | ✓ complete |
+| 6 | Backtest engine | ✓ complete — 300 tests pass |
+| — | Paper mode | disabled until research validated |
+| — | Live mode | disabled until paper parity proven |
 
 ## Architecture decisions
 
-- Research-first: paper and live modes exit with error until validated
+- Research-first: paper and live modes exit with error until backtest is validated
 - Config parsed manually from TOML — no serde/toml crate dependency
-- Conservative intrabar fill: worst-case price within the bar
+- No-lookahead rule: 5m candle at 1m index `i` only used if `ts ≤ candle[i].ts − 240_000 ms`
+- Conservative intrabar fill: worst-case price within bar; if SL and TP both hit, SL assumed first
+- Deterministic signal IDs: `SIG-BT-XXXXXXXX` (8-digit zero-padded per symbol run)
 - LLM, Telegram, learning, multi-agent: out of scope until research validated
 
 ## GitHub

@@ -38,6 +38,7 @@ pub struct ResearchConfig {
     pub stop_slippage_bps: f64,
     // backtest
     pub conservative_intrabar: bool,
+    pub max_bars_held: u32,
     pub min_confidence: u8,
 }
 
@@ -63,6 +64,7 @@ impl Default for ResearchConfig {
             market_impact_bps: 1.0,
             stop_slippage_bps: 5.0,
             conservative_intrabar: true,
+            max_bars_held: 60,
             min_confidence: 65,
         }
     }
@@ -117,6 +119,7 @@ impl ResearchConfig {
                     cfg.stop_slippage_bps = parse_f64(value, cfg.stop_slippage_bps)
                 }
                 "conservative_intrabar" => cfg.conservative_intrabar = value == "true",
+                "max_bars_held" => cfg.max_bars_held = value.parse().unwrap_or(cfg.max_bars_held),
                 "min_confidence" => {
                     cfg.min_confidence = value.parse().unwrap_or(cfg.min_confidence)
                 }

@@ -1,27 +1,30 @@
-//! Research orchestrator — Phase 5: risk and cost model ready.
+//! Research orchestrator — Phase 6: Backtest Engine.
 //!
-//! Full backtest loop will be activated in later phases once:
-//!   Phase 6: backtest engine
-//!   Phase 7: report writers
+//! Runs the deterministic backtest for each configured symbol and writes:
+//!   reports/backtest_summary.json
+//!   reports/trades.csv
+//!   reports/equity_curve.csv
+//!
+//! Paper and live modes remain disabled.
 
 use std::path::Path;
 
+use crate::backtest::{BacktestEngine, ReportWriter};
 use crate::config::ResearchConfig;
 use crate::core::Timeframe;
-use crate::market::{CandleStore, DataQualityIssueKind, OhlcvLoader};
+use crate::market::{DataQualityIssueKind, OhlcvLoader};
 
-/// Run Phase 5 research summary.
+/// Run Phase 6 research: deterministic backtest + report generation.
 ///
-/// Validates config, loads market data, builds candle store, and prints a
-/// truthful data + indicator + strategy + risk model readiness summary.
-/// Does not run a backtest. Does not generate fake results. Does not write reports.
+/// Validates config, loads market data, runs the backtest engine, prints a
+/// truthful summary, and writes report files.  Does not claim the strategy is
+/// profitable.  Does not give trading advice.
 pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
     println!("=================================================================");
-    println!(" Northflow — Phase 5: Risk and Cost Model");
+    println!(" Northflow — Phase 6: Backtest Engine");
     println!("=================================================================");
     println!();
 
-    // Validate explicit timeframe roles.
     cfg.validate_timeframes().map_err(|e| format!("{e}"))?;
 
     println!("  Timeframe model:");
@@ -38,8 +41,11 @@ pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
         cfg.confirmation_timeframe
     );
     println!();
-    println!("  paper mode  DISABLED — research engine not yet validated");
-    println!("  live mode   DISABLED — research engine not yet validated");
+    println!("  paper mode  DISABLED — research engine not yet validated for paper");
+    println!("  live mode   DISABLED — paper/live parity not yet proven");
+    println!();
+    println!("  Note: backtest results are historical simulation only.");
+    println!("        Do not use as financial advice or profitability claims.");
     println!();
 
     for symbol in &cfg.symbols {
@@ -55,16 +61,17 @@ pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
     println!("Strategy engine ready:");
     println!("  screened_vwap_scalp");
     println!("  Output: Signal only");
-    println!("  No orders, no risk sizing, no backtest execution");
     println!();
     println!("Risk model ready:");
     println!("  position sizing");
     println!("  cost model");
     println!("  risk guards");
     println!("  Output: RiskAssessment only");
-    println!("  No orders, no fills, no backtest execution");
     println!();
-    println!("Next: Phase 6 — backtest engine");
+    println!("Backtest engine ready:");
+    println!("  conservative intrabar fill model");
+    println!("  no lookahead across 5m / 15m candles");
+    println!("  deterministic signal IDs (SIG-BT-XXXXXXXX)");
     println!();
 
     Ok(())
@@ -74,19 +81,83 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
     let csv_path = Path::new(&cfg.data_dir).join(format!("{symbol}.csv"));
 
     if !csv_path.exists() {
-        println!("No historical CSV found for {symbol}.");
-        println!("Expected path: {}", csv_path.display());
-        println!("Place a 1m OHLCV CSV file with columns:");
-        println!("  timestamp,open,high,low,close,volume");
+        println!("Symbol: {symbol}");
+        println!("  No historical CSV found.");
+        println!("  Expected path: {}", csv_path.display());
+        println!("  Place a 1m OHLCV CSV file with columns:");
+        println!("    timestamp,open,high,low,close,volume");
         println!();
         return;
     }
 
-    let load_result = match OhlcvLoader::load_file(&csv_path) {
+    // Print data quality summary (mirrors Phase 5 output).
+    let data_quality_ok = print_data_quality(cfg, symbol, &csv_path);
+    if !data_quality_ok {
+        println!("  Skipping backtest — fix data quality errors first.");
+        println!();
+        return;
+    }
+
+    // Run backtest.
+    match BacktestEngine::run(cfg, symbol) {
+        Err(e) => {
+            println!("  Backtest error: {e}");
+            println!();
+        }
+        Ok(None) => {
+            println!("  No data returned from backtest.");
+            println!();
+        }
+        Ok(Some(result)) => {
+            let s = &result.summary;
+            println!("  Backtest complete:");
+            println!("    Total trades:           {}", s.total_trades);
+            println!("    Win rate:               {:.2}%", s.win_rate);
+            println!("    Net PnL:                {:.2}", s.net_pnl);
+            println!("    Gross PnL:              {:.2}", s.gross_pnl);
+            println!("    Total fees:             {:.2}", s.total_fee);
+            println!("    Total slippage:         {:.2}", s.total_slippage);
+            let pf_str = if result.summary.profit_factor.is_infinite() {
+                "inf".to_string()
+            } else {
+                format!("{:.4}", result.summary.profit_factor)
+            };
+            println!("    Profit factor:          {pf_str}");
+            println!("    Max drawdown:           {:.2}%", s.max_drawdown);
+            println!("    Max consecutive losses: {}", s.max_consecutive_losses);
+            println!();
+
+            // Write report files.
+            match ReportWriter::write_all(
+                &cfg.reports_dir,
+                &result.summary,
+                &result.trades,
+                &result.equity_curve,
+            ) {
+                Ok(()) => {
+                    println!("  Reports written:");
+                    println!("    {}/backtest_summary.json", cfg.reports_dir);
+                    println!("    {}/trades.csv", cfg.reports_dir);
+                    println!("    {}/equity_curve.csv", cfg.reports_dir);
+                }
+                Err(e) => {
+                    println!("  Warning: could not write reports: {e}");
+                }
+            }
+            println!();
+        }
+    }
+}
+
+/// Print data quality for the symbol.  Returns `true` if no errors.
+fn print_data_quality(_cfg: &ResearchConfig, symbol: &str, csv_path: &Path) -> bool {
+    use crate::market::CandleStore;
+
+    let load_result = match OhlcvLoader::load_file(csv_path) {
         Ok(r) => r,
         Err(e) => {
-            println!("Error loading {symbol}: {e}");
-            return;
+            println!("  Error loading {symbol}: {e}");
+            return false;
         }
     };
 
@@ -94,8 +165,8 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
     let store = match CandleStore::build_from_1m(load_result.candles) {
         Ok(s) => s,
         Err(e) => {
-            println!("Error building candle store for {symbol}: {e}");
-            return;
+            println!("  Error building candle store: {e}");
+            return false;
         }
     };
 
@@ -116,7 +187,7 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
         "15m candles:           {}",
         store.len(Timeframe::FifteenMinute)
     );
-    println!("Data quality issues:   {}", quality.error_count());
+    println!("Data quality errors:   {}", quality.error_count());
     println!("Duplicate timestamps:  {dup_count}");
     println!("Missing gaps:          {}", quality.missing_gaps.len());
 
@@ -129,11 +200,12 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
                 None => println!("    [{}] {}", issue.kind, issue.message),
             }
         }
+        return false;
     }
 
     if !quality.missing_gaps.is_empty() {
         println!();
-        println!("  Missing 1m gaps:");
+        println!("  Missing 1m gaps (warnings):");
         for gap in &quality.missing_gaps {
             println!(
                 "    {} missing candle(s) after ts={}  (expected ts={})",
@@ -143,4 +215,5 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
     }
 
     println!();
+    true
 }
