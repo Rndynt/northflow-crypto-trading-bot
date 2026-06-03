@@ -1,0 +1,24 @@
+[package]
+name = "northflow-crypto-trading-bot"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Northflow — deterministic crypto trading research and execution core"
+license = "MIT"
+repository = "https://github.com/Rndynt/northflow-crypto-trading-bot"
+readme = "README.md"
+
+[[bin]]
+name = "northflow"
+path = "src/main.rs"
+
+[lib]
+name = "northflow_crypto_trading_bot"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+panic = "abort"
+strip = "symbols"

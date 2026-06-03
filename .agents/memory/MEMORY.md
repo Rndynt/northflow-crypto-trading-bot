@@ -1,0 +1,1 @@
+- [Rust-only project](rust-only-project.md) — this Replit is pure Rust, no Node.js/frontend; nodejs-24 uninstalled, rust-stable installed

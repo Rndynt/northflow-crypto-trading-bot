@@ -1,0 +1,32 @@
+[mode]
+run_mode = "research"
+dry_run = true
+
+[pairs]
+symbols = ["BTCUSDT"]
+entry_timeframe = "1m"
+screening_timeframe = "15m"
+
+[strategy]
+active = "screened_vwap_scalp"
+min_confidence = 65
+
+[risk]
+initial_equity_usd = 5000.0
+risk_per_trade_pct = 0.25
+max_open_positions = 1
+max_leverage = 3.0
+min_reward_risk = 1.5
+max_daily_loss_pct = 1.5
+max_drawdown_pct = 5.0
+
+[cost]
+taker_fee_bps = 4.0
+slippage_bps = 2.0
+spread_bps = 1.0
+market_impact_bps = 1.0
+
+[backtest]
+data_dir = "data/historical"
+reports_dir = "reports"
+conservative_intrabar = true
