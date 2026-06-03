@@ -2,14 +2,14 @@
 
 A pure Rust CLI and library for deterministic, research-first crypto strategy backtesting.
 
-## Current phase: Phase 3 — Indicators ✓
+## Current phase: Phase 4 — Strategy Engine ✓
 
 | Phase | Status |
 |---|---|
 | Phase 1 — Core Domain (Candle, Signal, Order, Trade …) | ✅ Complete |
 | Phase 2 — Market Data (OHLCV loader, timeframe builder, data quality) | ✅ Complete |
 | Phase 3 — Indicators (EMA 8/21/50/200, ATR 14, VWAP, Volume SMA 20) | ✅ Complete |
-| Phase 4 — Strategy (screened_vwap_scalp) | ⏳ Pending |
+| Phase 4 — Strategy Engine (screened_vwap_scalp) | ✅ Complete |
 | Phase 5 — Risk & Cost model | ⏳ Pending |
 | Phase 6 — Backtest engine | ⏳ Pending |
 | Phase 7 — Reports & Attribution | ⏳ Pending |
@@ -18,10 +18,55 @@ See `docs/ROADMAP.md` for full roadmap and architecture decisions.
 
 ---
 
-## Phase 3 indicators
+## Phase 4 strategy engine
 
-All indicators are deterministic, streaming, and consume validated `Candle` values.
-No network, no interpolation, no synthetic candles.
+The first active strategy is `screened_vwap_scalp`.
+
+**Strategy output: `Signal` only.**  
+No orders. No risk sizing. No backtest execution. No position creation.
+
+### Timeframe roles (explicit — never inferred from order)
+
+| Role | Timeframe | Purpose |
+|---|---|---|
+| `entry_timeframe` | 1m | Entry and execution signal |
+| `confirmation_timeframe` | 5m | Intermediate confirmation |
+| `screening_timeframe` | 15m | Market regime / bias filter |
+
+### screened_vwap_scalp rules
+
+**Required indicators (1m entry):** EMA 8, EMA 21, ATR 14, VWAP, Volume SMA 20  
+**Required indicators (15m / 5m):** EMA 50, EMA 200
+
+**Regime classification (15m screening and 5m confirmation):**
+- Bullish: EMA 50 > EMA 200 AND close > EMA 50
+- Bearish: EMA 50 < EMA 200 AND close < EMA 50
+- Neutral: EMA values present but above conditions not met
+- Unknown: EMA 50 or EMA 200 missing (warmup)
+
+**Signal direction:**
+- Long: screening Bullish + confirmation Bullish or Neutral
+- Short: screening Bearish + confirmation Bearish or Neutral
+- No signal: screening Neutral / Unknown, or confirmation Unknown
+
+**Hard gates (any failure → no signal):**
+- Pullback near: |close − VWAP| or |close − EMA 21| ≤ 20 bps
+- Reclaim (Long): close > EMA 8 OR close > VWAP
+- Reject (Short): close < EMA 8 OR close < VWAP
+- ATR valid: 5 bps ≤ ATR₁₄ ≤ 300 bps
+- Volume acceptable: volume ≥ Volume SMA 20 × 0.8
+- Confidence ≥ `min_confidence`
+
+**Geometry:**
+- Long: entry = close, SL = close − ATR, TP = close + ATR × 1.5
+- Short: entry = close, SL = close + ATR, TP = close − ATR × 1.5
+- Target reward/risk ≈ 1.5
+
+Paper and live modes remain disabled. No risk sizing yet. No order creation yet. No backtest execution yet.
+
+---
+
+## Phase 3 indicators
 
 | Indicator | Period | Notes |
 |---|---|---|
@@ -29,8 +74,6 @@ No network, no interpolation, no synthetic candles.
 | ATR | 14 | Wilder smoothing; initial value = mean of first 14 TRs |
 | VWAP | — | Session-cumulative; typical = (H+L+C)/3; zero-volume safe |
 | Volume SMA | 20 | Rolling window; `VecDeque` with O(1) update |
-
-Paper and live modes remain disabled. No strategy, backtest, or report generation yet.
 
 ---
 
@@ -44,13 +87,8 @@ Every `Signal` must carry a `signal_id`. All downstream objects trace back to it
 signal_id → order_id → fill_id → position_id → exit_order_id → trade_id
 ```
 
-Example IDs:
-```
-SIG-BT-00000001
-ORD-SIG-BT-00000001-ENTRY
-ORD-SIG-BT-00000001-SL
-TRD-SIG-BT-00000001
-```
+Deterministic format: `SIG-BT-00000001`, `SIG-BT-00000002`, …  
+No random IDs. No UUID dependency. No system time.
 
 ### Timeframe roles are explicit
 
@@ -100,8 +138,8 @@ Invalid candles are rejected and recorded in the data quality report. No silent 
 ### Interval and gap detection
 
 - **Duplicate timestamps**: first occurrence is kept, subsequent duplicates rejected and reported.
-- **Missing 1m gaps**: delta is a positive exact multiple of 60 000 ms (e.g. 120 000, 180 000) — detected and reported with exact missing count (warning, not fatal). Clean gaps require the delta to be divisible by 60 000 ms with no remainder.
-- **Irregular intervals**: any delta that is not an exact multiple of 60 000 ms — detected and reported as an **error**. This includes sub-minute deltas (e.g. 30 000 ms) and non-multiple super-minute deltas (e.g. 90 000 ms, 150 000 ms). These indicate the source data is not valid 1m OHLCV.
+- **Missing 1m gaps**: delta is a positive exact multiple of 60 000 ms — detected and reported with exact missing count (warning, not fatal). Clean gaps require the delta to be divisible by 60 000 ms with no remainder.
+- **Irregular intervals**: any delta that is not an exact multiple of 60 000 ms — detected and reported as an **error**. This includes sub-minute deltas (e.g. 30 000 ms) and non-multiple super-minute deltas (e.g. 90 000 ms, 150 000 ms).
 - **Non-monotonic input**: detected before sorting and flagged in the quality report.
 
 ### Timeframe buckets require exact candle counts
@@ -123,13 +161,11 @@ These modes will be enabled only after the research engine produces validated, t
 
 ### No fake backtest results
 
-`cargo run -- research` prints a truthful market data summary — candle counts, data quality
-issues, missing gaps, indicator readiness. It does not claim profitability or generate fake trades.
+`cargo run -- research` prints a truthful market data + indicator + strategy readiness summary. It does not claim profitability or generate fake trades.
 
 ### Legacy code is reference-only
 
-Previous code under `legacy/aria/` is preserved for reference only. The active `src/` tree
-never imports from `legacy/`. See `legacy/README.md`.
+Previous code under `legacy/aria/` is preserved for reference only. The active `src/` tree never imports from `legacy/`. See `legacy/README.md`.
 
 ---
 
@@ -172,8 +208,11 @@ northflow-crypto-trading-bot/
 │   │   ├── vwap.rs         — VWAP (session-cumulative)
 │   │   ├── volume.rs       — VolumeSma 20 (rolling window)
 │   │   └── snapshot.rs     — IndicatorSnapshot + IndicatorEngine
+│   ├── strategy/           — Phase 4: deterministic strategy engine
+│   │   ├── traits.rs       — Strategy trait, StrategyContext, MultiTimeframeInput
+│   │   ├── regime.rs       — MarketRegime enum + classify_screening_regime()
+│   │   └── screened_vwap_scalp.rs — ScreenedVwapScalp strategy
 │   ├── config/             — ResearchConfig (parsed from TOML, no serde)
-│   ├── strategy/           — Phase 4 placeholder (screened_vwap_scalp)
 │   ├── risk/               — Phase 5 placeholder (sizing + drawdown guards)
 │   ├── execution/          — Phase 6 placeholder (SimExecutor)
 │   ├── research/           — Research CLI orchestrator
@@ -198,34 +237,30 @@ northflow-crypto-trading-bot/
 # Build
 cargo build --release
 
-# Phase 3 research summary (needs data/historical/BTCUSDT.csv for symbol data)
+# Phase 4 research summary (needs data/historical/BTCUSDT.csv for symbol data)
 cargo run -- research --config config/research.toml
 
-# Run all unit tests (Phase 1 + Phase 2 + Phase 3)
+# Run all unit tests (Phase 1 + Phase 2 + Phase 3 + Phase 4)
 cargo test
 
 # Print help
 cargo run -- help
 ```
 
-### Example output (with data file present)
+### Example output (no CSV file)
 
 ```
-Northflow — Phase 3: Indicators
+Northflow — Phase 4: Strategy Engine
 
   Timeframe model:
     entry_timeframe        = "1m"  (1m  → entry & execution)
     screening_timeframe    = "15m" (15m → regime bias)
     confirmation_timeframe = "5m"  (5m  → confirmation)
 
-Symbol:                BTCUSDT
-Source:                data/historical/BTCUSDT.csv
-1m candles:            1000
-5m candles:            200
-15m candles:           66
-Data quality issues:   0
-Duplicate timestamps:  0
-Missing gaps:          0
+No historical CSV found for BTCUSDT.
+Expected path: data/historical/BTCUSDT.csv
+Place a 1m OHLCV CSV file with columns:
+  timestamp,open,high,low,close,volume
 
 Indicators ready:
   EMA 8 / 21 / 50 / 200
@@ -233,16 +268,12 @@ Indicators ready:
   VWAP (session-cumulative)
   Volume SMA 20
 
-Next: Phase 4 — strategy engine
-```
+Strategy engine ready:
+  screened_vwap_scalp
+  Output: Signal only
+  No orders, no risk sizing, no backtest execution
 
-### Example output (no CSV file)
-
-```
-No historical CSV found for BTCUSDT.
-Expected path: data/historical/BTCUSDT.csv
-Place a 1m OHLCV CSV file with columns:
-  timestamp,open,high,low,close,volume
+Next: Phase 5 — risk and cost model
 ```
 
 ---

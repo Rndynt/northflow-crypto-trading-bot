@@ -1,7 +1,6 @@
-//! Research orchestrator — Phase 3: indicators ready; data summary active.
+//! Research orchestrator — Phase 4: strategy engine ready; data summary active.
 //!
 //! Full backtest loop will be activated in later phases once:
-//!   Phase 4: screened_vwap_scalp strategy
 //!   Phase 5: risk + cost model
 //!   Phase 6: backtest engine
 //!   Phase 7: report writers
@@ -12,14 +11,14 @@ use crate::config::ResearchConfig;
 use crate::core::Timeframe;
 use crate::market::{CandleStore, DataQualityIssueKind, OhlcvLoader};
 
-/// Run Phase 3 research summary.
+/// Run Phase 4 research summary.
 ///
 /// Validates config, loads market data, builds candle store, and prints a
-/// truthful data + indicator readiness summary.
+/// truthful data + indicator + strategy readiness summary.
 /// Does not run a backtest. Does not generate fake results. Does not write reports.
 pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
     println!("=================================================================");
-    println!(" Northflow — Phase 3: Indicators");
+    println!(" Northflow — Phase 4: Strategy Engine");
     println!("=================================================================");
     println!();
 
@@ -54,7 +53,12 @@ pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
     println!("  VWAP (session-cumulative)");
     println!("  Volume SMA 20");
     println!();
-    println!("Next: Phase 4 — strategy engine");
+    println!("Strategy engine ready:");
+    println!("  screened_vwap_scalp");
+    println!("  Output: Signal only");
+    println!("  No orders, no risk sizing, no backtest execution");
+    println!();
+    println!("Next: Phase 5 — risk and cost model");
     println!();
 
     Ok(())

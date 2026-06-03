@@ -1,10 +1,22 @@
-//! Strategy engine — Phase 4 placeholder.
+//! Strategy engine — Phase 4.
 //!
-//! Will implement:
-//!   - StrategyTrait for signal emission
-//!   - screened_vwap_scalp: EMA crossover + VWAP filter
+//! Active strategy: screened_vwap_scalp
+//!   Emits Signal only. No orders, no risk sizing, no backtest execution.
 //!
-//! Rules:
-//!   - Strategies may only emit Signals (see core::Signal).
-//!   - Strategies must NOT place orders, call exchanges, or mutate account state.
-//!   - Only one strategy active in Phase 4: screened_vwap_scalp.
+//! Timeframe roles (explicit — never inferred from array order):
+//!   entry_timeframe        = "1m"   (entry and execution)
+//!   confirmation_timeframe = "5m"   (intermediate confirmation)
+//!   screening_timeframe    = "15m"  (market regime / bias)
+//!
+//! Downstream phases:
+//!   Phase 5 — risk and cost model
+//!   Phase 6 — backtest engine
+//!   Phase 7 — report writers
+
+pub mod regime;
+pub mod screened_vwap_scalp;
+pub mod traits;
+
+pub use regime::{MarketRegime, classify_screening_regime};
+pub use screened_vwap_scalp::ScreenedVwapScalp;
+pub use traits::{MultiTimeframeInput, Strategy, StrategyContext};
