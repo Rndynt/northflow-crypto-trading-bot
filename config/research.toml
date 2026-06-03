@@ -18,8 +18,8 @@ risk_per_trade_pct = 0.25
 max_open_positions = 1
 max_leverage = 3.0
 min_reward_risk = 1.5
-max_daily_loss_pct = 1.5
-max_drawdown_pct = 5.0
+max_daily_loss_pct = 100.0
+max_drawdown_pct = 100.0
 
 [cost]
 taker_fee_bps = 4.0

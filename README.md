@@ -107,6 +107,18 @@ northflow paper   # exits with error — research engine not yet validated for p
 northflow live    # exits with error — paper/live parity not yet proven
 ```
 
+### Strategy diagnostics
+
+Northflow writes extra diagnostic reports for research analysis:
+
+- `signal_diagnostics.csv` — one row per trade with cost bps, edge realization, month, and filters.
+- `rejection_by_stage_reason.csv` — grouped risk rejection reasons by stage and geometry mode.
+- `monthly_summary.csv` — monthly PnL, win rate, cost, edge, and exit reason summary.
+- `cost_edge_distribution.csv` — buckets trades by expected edge bps.
+- `trade_distribution_summary.json` — compact summary of costs, edge realization, and dominant rejection reason.
+
+These reports are diagnostic only. They do not tune parameters and do not imply profitability.
+
 ---
 
 ## Entry Geometry Mode

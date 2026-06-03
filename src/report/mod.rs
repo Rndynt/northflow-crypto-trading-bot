@@ -1,7 +1,8 @@
 //! Phase 7 — Reports and Attribution.
 //!
-//! This module provides the attribution, audit, manifest, and validation layers
-//! that sit on top of the Phase 6 low-level report writer in src/backtest/report.rs.
+//! This module provides the attribution, audit, manifest, validation, and
+//! diagnostics layers that sit on top of the Phase 6 low-level report writer
+//! in src/backtest/report.rs.
 //!
 //! Output files written by this module:
 //!   reports/attribution_summary.json
@@ -11,9 +12,15 @@
 //!   reports/attribution_by_filter.csv
 //!   reports/audit_report.json
 //!   reports/report_manifest.json
+//!   reports/signal_diagnostics.csv
+//!   reports/rejection_by_stage_reason.csv
+//!   reports/monthly_summary.csv
+//!   reports/cost_edge_distribution.csv
+//!   reports/trade_distribution_summary.json
 
 pub mod attribution;
 pub mod audit;
+pub mod diagnostics;
 pub mod manifest;
 pub mod validation;
 
@@ -21,6 +28,10 @@ pub use attribution::{
     AttributionBucket, AttributionEngine, AttributionReport, AttributionSummary,
 };
 pub use audit::{AuditIssue, AuditReport, AuditSeverity, ReportAuditor};
+pub use diagnostics::{
+    CostEdgeDistribution, CostEdgeRow, DiagnosticEngine, DiagnosticReport, DiagnosticWriter,
+    MonthlySummaryRow, RejectionByStageReasonRow, TradeDistributionSummary,
+};
 pub use manifest::{ManifestWriter, ReportFileEntry, ReportManifest};
 pub use validation::{TradeValidator, ValidationResult};
 
@@ -208,13 +219,19 @@ pub(crate) fn json_str(s: &str) -> String {
 mod tests {
     use super::*;
     use crate::backtest::metrics::EquityPoint;
+    use crate::backtest::risk_trace::SignalFlowSummary;
     use crate::core::{
         Trade, position::PositionId, side::Side, signal::SignalId, signal::StrategyId,
         symbol::Symbol, trade::TradeExitReason, trade::TradeId,
     };
     use crate::report::attribution::AttributionEngine;
     use crate::report::audit::ReportAuditor;
+    use crate::report::diagnostics::DiagnosticEngine;
     use crate::report::manifest::ManifestWriter;
+
+    fn empty_diag() -> crate::report::diagnostics::DiagnosticReport {
+        DiagnosticEngine::build(&[], &[], &SignalFlowSummary::default())
+    }
 
     fn valid_trade(n: u32) -> Trade {
         let sid = format!("SIG-BT-{n:08}");
@@ -260,7 +277,7 @@ mod tests {
         let trades = vec![valid_trade(1)];
         let attr = AttributionEngine::build(&trades);
         let audit = ReportAuditor::audit_trades(&trades);
-        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         let content = std::fs::read_to_string(format!("{dir}/attribution_summary.json")).unwrap();
@@ -275,7 +292,7 @@ mod tests {
         let trades = vec![valid_trade(1)];
         let attr = AttributionEngine::build(&trades);
         let audit = ReportAuditor::audit_trades(&trades);
-        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         let content = std::fs::read_to_string(format!("{dir}/attribution_by_regime.csv")).unwrap();
@@ -290,7 +307,7 @@ mod tests {
         let trades = vec![valid_trade(1)];
         let attr = AttributionEngine::build(&trades);
         let audit = ReportAuditor::audit_trades(&trades);
-        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         let content =
@@ -305,7 +322,7 @@ mod tests {
         let trades = vec![valid_trade(1)];
         let attr = AttributionEngine::build(&trades);
         let audit = ReportAuditor::audit_trades(&trades);
-        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         let content = std::fs::read_to_string(format!("{dir}/attribution_by_side.csv")).unwrap();
@@ -319,7 +336,7 @@ mod tests {
         let trades = vec![valid_trade(1)];
         let attr = AttributionEngine::build(&trades);
         let audit = ReportAuditor::audit_trades(&trades);
-        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         let content = std::fs::read_to_string(format!("{dir}/attribution_by_filter.csv")).unwrap();
@@ -334,7 +351,7 @@ mod tests {
         let trades = vec![valid_trade(1)];
         let attr = AttributionEngine::build(&trades);
         let audit = ReportAuditor::audit_trades(&trades);
-        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &trades, &[], &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         let content = std::fs::read_to_string(format!("{dir}/audit_report.json")).unwrap();
@@ -351,7 +368,7 @@ mod tests {
         let equity: Vec<EquityPoint> = vec![];
         let attr = AttributionEngine::build(&trades);
         let audit = ReportAuditor::audit_trades(&trades);
-        let manifest = ManifestWriter::build(&dir, &trades, &equity, &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &trades, &equity, &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         let content = std::fs::read_to_string(format!("{dir}/report_manifest.json")).unwrap();
@@ -380,7 +397,7 @@ mod tests {
         let dir = tmp_dir("empty");
         let attr = AttributionEngine::build(&[]);
         let audit = ReportAuditor::audit_trades(&[]);
-        let manifest = ManifestWriter::build(&dir, &[], &[], &attr, 0);
+        let manifest = ManifestWriter::build(&dir, &[], &[], &attr, 0, &empty_diag());
         AttributionWriter::write_all(&dir, &attr, &audit, &manifest).unwrap();
 
         for filename in &[

@@ -291,6 +291,32 @@ Then rerun:
 
 ---
 
+## Expected report files
+
+After a successful research run, the following files are written to `reports/`:
+
+```text
+backtest_summary.json
+trades.csv
+equity_curve.csv
+risk_rejections.csv
+signal_flow_summary.json
+attribution_summary.json
+attribution_by_regime.csv
+attribution_by_exit_reason.csv
+attribution_by_side.csv
+attribution_by_filter.csv
+audit_report.json
+report_manifest.json
+signal_diagnostics.csv
+rejection_by_stage_reason.csv
+monthly_summary.csv
+cost_edge_distribution.csv
+trade_distribution_summary.json
+```
+
+---
+
 ## Important notes
 
 - Northflow expects **1m source data**.

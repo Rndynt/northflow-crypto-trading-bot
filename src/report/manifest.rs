@@ -11,6 +11,7 @@ use std::path::Path;
 use crate::backtest::metrics::EquityPoint;
 use crate::core::{NorthflowError, Trade};
 use crate::report::attribution::AttributionReport;
+use crate::report::diagnostics::DiagnosticReport;
 
 // ── ReportFileEntry ───────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ impl ManifestWriter {
         equity_curve: &[EquityPoint],
         attribution: &AttributionReport,
         risk_rejections_count: usize,
+        diagnostic: &DiagnosticReport,
     ) -> ReportManifest {
         let dir = manifest_display_dir(reports_dir);
 
@@ -81,8 +83,23 @@ impl ManifestWriter {
         entries.insert(format!("{dir}/audit_report.json"), ("audit", 1));
         entries.insert(format!("{dir}/backtest_summary.json"), ("summary", 1));
         entries.insert(
+            format!("{dir}/cost_edge_distribution.csv"),
+            ("cost_edge_distribution", diagnostic.cost_edge_distribution.buckets.len()),
+        );
+        entries.insert(
             format!("{dir}/equity_curve.csv"),
             ("equity_curve", equity_curve.len()),
+        );
+        entries.insert(
+            format!("{dir}/monthly_summary.csv"),
+            ("monthly_summary", diagnostic.monthly.len()),
+        );
+        entries.insert(
+            format!("{dir}/rejection_by_stage_reason.csv"),
+            (
+                "rejection_by_stage_reason",
+                diagnostic.rejection_by_stage_reason.len(),
+            ),
         );
         entries.insert(format!("{dir}/report_manifest.json"), ("manifest", 1));
         entries.insert(
@@ -90,8 +107,16 @@ impl ManifestWriter {
             ("risk_rejections", risk_rejections_count),
         );
         entries.insert(
+            format!("{dir}/signal_diagnostics.csv"),
+            ("signal_diagnostics", trades.len()),
+        );
+        entries.insert(
             format!("{dir}/signal_flow_summary.json"),
             ("signal_flow_summary", 1),
+        );
+        entries.insert(
+            format!("{dir}/trade_distribution_summary.json"),
+            ("trade_distribution_summary", 1),
         );
         entries.insert(format!("{dir}/trades.csv"), ("trades", trades.len()));
 
@@ -194,12 +219,16 @@ mod tests {
     }
 
     fn make_manifest(reports_dir: &str) -> ReportManifest {
+        use crate::backtest::risk_trace::SignalFlowSummary;
+        use crate::report::diagnostics::DiagnosticEngine;
+        let diag = DiagnosticEngine::build(&[], &[], &SignalFlowSummary::default());
         ManifestWriter::build(
             reports_dir,
             &[],
             &empty_equity(),
             &AttributionEngine::build(&[]),
             0,
+            &diag,
         )
     }
 

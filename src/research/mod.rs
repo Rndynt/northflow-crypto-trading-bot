@@ -22,7 +22,10 @@ use crate::backtest::{BacktestEngine, ReportWriter};
 use crate::config::ResearchConfig;
 use crate::core::Timeframe;
 use crate::market::{DataQualityIssueKind, OhlcvLoader};
-use crate::report::{AttributionEngine, AttributionWriter, ManifestWriter, ReportAuditor};
+use crate::report::{
+    AttributionEngine, AttributionWriter, DiagnosticEngine, DiagnosticWriter, ManifestWriter,
+    ReportAuditor,
+};
 
 /// Run Phase 7 research: deterministic backtest + full attribution report generation.
 ///
@@ -208,6 +211,13 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
             println!("Base backtest reports written.");
             println!();
 
+            // ── Diagnostics (built before manifest so counts are available) ───
+            let diagnostics = DiagnosticEngine::build(
+                &result.trades,
+                &result.risk_rejections,
+                &result.signal_flow,
+            );
+
             // ── Phase 7: attribution, audit, and manifest ─────────────────────
             let attribution = AttributionEngine::build(&result.trades);
             let audit = ReportAuditor::audit_trades(&result.trades);
@@ -217,6 +227,7 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
                 &result.equity_curve,
                 &attribution,
                 result.risk_rejections.len(),
+                &diagnostics,
             );
 
             // Audit summary — print before writing so the user sees results
@@ -279,6 +290,39 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
                 }
             }
             println!("Phase 7 attribution reports written.");
+            println!();
+
+            // ── Diagnostic report files ───────────────────────────────────────
+            let d = &diagnostics.trade_distribution;
+            match DiagnosticWriter::write_all_with_trades(
+                &cfg.reports_dir,
+                &diagnostics,
+                &result.trades,
+            ) {
+                Ok(()) => {
+                    println!("  Diagnostic reports written:");
+                    println!("    {}/signal_diagnostics.csv", cfg.reports_dir);
+                    println!("    {}/rejection_by_stage_reason.csv", cfg.reports_dir);
+                    println!("    {}/monthly_summary.csv", cfg.reports_dir);
+                    println!("    {}/cost_edge_distribution.csv", cfg.reports_dir);
+                    println!("    {}/trade_distribution_summary.json", cfg.reports_dir);
+                }
+                Err(e) => {
+                    println!("  Warning: could not write diagnostic reports: {e}");
+                }
+            }
+            println!("Diagnostics:");
+            println!("  avg total cost bps:        {:.2}", d.avg_total_cost_bps);
+            println!(
+                "  avg edge realization bps:  {:.2}",
+                d.avg_edge_realization_bps
+            );
+            if !d.dominant_rejection_reason.is_empty() {
+                println!(
+                    "  dominant rejection:        {} ({})",
+                    d.dominant_rejection_reason, d.dominant_rejection_count
+                );
+            }
             println!();
         }
     }
