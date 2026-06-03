@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 15% 6%;
+    --foreground: 220 15% 95%;
+    --card: 230 14% 8.5%;
+    --card-foreground: 220 15% 95%;
+    --popover: 230 14% 8.5%;
+    --popover-foreground: 220 15% 95%;
+    --primary: 152 80% 45%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 230 12% 14%;
+    --secondary-foreground: 220 10% 80%;
+    --muted: 230 12% 12%;
+    --muted-foreground: 230 10% 50%;
+    --accent: 230 12% 14%;
+    --accent-foreground: 220 15% 95%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 230 12% 13%;
+    --input: 230 12% 14%;
+    --ring: 152 80% 45%;
+    --radius: 0.5rem;
+    --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+    --profit: #16c784;
+    --loss: #ea3943;
+    --warning: #f0a500;
+    --info: #4f8ef7;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(230 12% 18%);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(230 12% 26%);
+  }
+}
+
+@layer utilities {
+  .text-profit  { color: var(--profit); }
+  .text-loss    { color: var(--loss); }
+  .text-warning { color: var(--warning); }
+  .text-info    { color: var(--info); }
+
+  .bg-profit    { background-color: var(--profit); }
+  .bg-loss      { background-color: var(--loss); }
+  .bg-warning   { background-color: var(--warning); }
+  .bg-info      { background-color: var(--info); }
+
+  .bg-profit\/10  { background-color: rgb(22 199 132 / 0.10); }
+  .bg-profit\/15  { background-color: rgb(22 199 132 / 0.15); }
+  .bg-loss\/10    { background-color: rgb(234 57 67 / 0.10); }
+  .bg-loss\/15    { background-color: rgb(234 57 67 / 0.15); }
+  .bg-warning\/10 { background-color: rgb(240 165 0 / 0.10); }
+  .bg-info\/10    { background-color: rgb(79 142 247 / 0.10); }
+
+  .border-profit\/20  { border-color: rgb(22 199 132 / 0.20); }
+  .border-profit\/30  { border-color: rgb(22 199 132 / 0.30); }
+  .border-loss\/20    { border-color: rgb(234 57 67 / 0.20); }
+  .border-loss\/30    { border-color: rgb(234 57 67 / 0.30); }
+  .border-loss\/50    { border-color: rgb(234 57 67 / 0.50); }
+  .border-warning\/30 { border-color: rgb(240 165 0 / 0.30); }
+
+  .font-mono { font-family: var(--font-mono); }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  .glass {
+    backdrop-filter: blur(16px) saturate(180%);
+    background: hsl(230 14% 8.5% / 0.85);
+  }
+
+  .nav-active-glow {
+    box-shadow: inset 2px 0 0 var(--profit);
+  }
+}
+
+/* Recharts dark overrides */
+.recharts-cartesian-axis-tick-value {
+  fill: hsl(230 10% 50%);
+  font-size: 10px;
+}
+.recharts-tooltip-wrapper { outline: none; }
+.recharts-default-tooltip {
+  background: hsl(230 14% 10%) !important;
+  border: 1px solid hsl(230 12% 16%) !important;
+  border-radius: 8px !important;
+}

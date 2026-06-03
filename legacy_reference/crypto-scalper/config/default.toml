@@ -1,0 +1,194 @@
+# Default configuration — tuned for autonomous HFT scalping.
+# Override via config/local.toml or ENV.
+
+[mode]
+# "paper" runs without any real order dispatch (simulated fills).
+# "live"  sends real orders to the exchange (requires API keys).
+# "backtest" processes historical CSVs and exits.
+run_mode = "paper"
+dry_run  = true
+fail_closed_without_llm = true
+single_position_per_symbol = true
+
+[exchange]
+name    = "binance"
+market  = "futures"     # spot | futures | testnet
+rest_base_url = "https://fapi.binance.com"
+ws_base_url   = "wss://fstream.binance.com/stream"
+api_key    = ""         # set via env BINANCE_API_KEY
+api_secret = ""         # set via env BINANCE_API_SECRET
+recv_window_ms = 5000
+open_type = "cross"       # cross | isolated
+leverage = 1
+position_mode = "dual-side"
+
+[pairs]
+symbols    = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+timeframes = ["5m"]
+
+[strategy]
+mode   = "adaptive"
+active = ["mean_reversion", "ema_ribbon", "momentum", "vwap_scalp", "squeeze"]
+# Lower TA threshold — the strategies already score conservatively (62-68 base).
+# Setting this to 60 lets the strategy confidence scores pass through.
+min_ta_confidence = 60
+paper_scout_enabled = true
+
+[advanced_alpha]
+# Disabled by default. When enabled, external data + Kalman trend context can
+# veto or modestly reduce pre-signal confidence before the risk/LLM pipeline.
+enabled = false
+min_abs_score = 0.20
+reduce_confidence_delta = 5
+feed_max_age_secs = 180
+kalman_process_noise = 0.01
+kalman_measurement_noise = 1.0
+
+[llm]
+# Default: OpenRouter (1 key, banyak model — Claude/GPT/Gemini/DeepSeek/Qwen).
+provider = "openrouter"
+model    = "anthropic/claude-3.5-haiku"
+api_key  = ""                                    # env OPENROUTER_API_KEY
+api_base = "https://openrouter.ai/api/v1/chat/completions"
+http_referer   = "https://github.com/whaledecoder/crypto-scalper"
+http_app_title = "ARIA Crypto Scalper"
+timeout_secs = 8
+# Lower LLM confidence floor — 50-59 confidence is allowed at reduced size per prompt.
+min_confidence = 50
+# Lower fallback threshold so TA-only mode still trades.
+fallback_ta_threshold = 60
+max_tokens = 1024
+
+[manager]
+# TraderManagerAgent — head-of-desk LLM.
+# DISABLED by default for autonomous operation — the brain LLM already
+# provides analysis. Enable only when you want a second opinion layer.
+enabled = false
+provider = "openrouter"
+api_base = "https://openrouter.ai/api/v1/chat/completions"
+model    = "anthropic/claude-3.5-haiku"
+timeout_secs = 6
+max_tokens   = 600
+fast_approve_min_conf = 80      # skip manager when brain conf >= this
+http_referer   = "https://github.com/whaledecoder/crypto-scalper"
+http_app_title = "ARIA TraderManager"
+# CRITICAL: fail-open on error so the bot keeps trading when manager is down.
+fail_open_on_error = true
+
+[risk]
+# HFT scalping risk profile — tighter SL/TP, more positions, lower per-trade risk.
+risk_per_trade_pct = 0.5        # 0.5% equity per trade (conservative but functional)
+max_open_positions = 3          # Allow 3 concurrent positions across symbols
+max_daily_loss_pct = 3.0        # 3% daily loss → circuit trip
+max_drawdown_pct   = 8.0        # 8% drawdown → circuit trip
+max_leverage       = 3          # 3× max leverage (safe)
+max_spread_pct     = 0.04       # 0.04% max spread (crypto spreads are wider)
+min_reward_risk    = 1.0        # Accept 1:1 R:R for scalping (was 1.2)
+# Net edge check: 2.0 bps minimum net edge after round-trip costs.
+# The R:R gate ensures directional edge; this catches signals where the
+# reward is eaten entirely by fees + spread before the trade can profit.
+min_net_edge_bps = 2.0
+max_position_notional_pct = 40.0  # 40% of equity per position
+assumed_daily_volume_usd = 1000000000.0
+min_margin_usd    = 1.0         # block dust trades below $1 margin; set 0 to disable
+equity_usd         = 5000.0
+
+[schedule]
+# 24h WIB (UTC+7) — NO dead zone for autonomous HFT.
+# The bot should trade around the clock. Set start=end to disable.
+dead_zone_start_hour_wib = 0
+dead_zone_end_hour_wib   = 0
+
+[feeds]
+cryptopanic_api_key = ""   # env CRYPTOPANIC_API_KEY
+lunarcrush_api_key  = ""   # env LUNARCRUSH_API_KEY
+glassnode_api_key   = ""   # env GLASSNODE_API_KEY
+whalealert_api_key  = ""   # env WHALE_ALERT_API_KEY
+deribit_base_url = "https://www.deribit.com"
+rss_feeds = [
+    "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "https://decrypt.co/feed",
+    "https://cointelegraph.com/rss",
+]
+
+[monitoring]
+telegram_bot_token = ""   # env TELEGRAM_BOT_TOKEN
+telegram_chat_id   = ""   # env TELEGRAM_CHAT_ID
+log_level          = "info"
+db_path            = "trades.db"
+metrics_bind       = "0.0.0.0:7999"
+
+[backtest]
+data_dir = "data/historical"
+from_ts  = ""
+to_ts    = ""
+fee_bps  = 4.0
+slippage_bps = 2.0
+market_impact_bps = 1.0
+trading_days_per_year = 365.0
+trades_per_day = 12.0
+
+[survival]
+# "Trade for life" — tuned for HFT: more forgiving cooldowns so the bot
+# keeps trading through normal losing streaks.
+enabled                            = true
+death_line_pct                     = 0.70    # equity floor: 70% of initial
+# 5 consecutive losses → 30 min cooldown (was 2 losses → 60 min)
+loss_streak_short                  = 5
+loss_streak_short_cooldown_min     = 30
+# 8 losses in 1 hour → 4 hour cooldown (was 4 in 1h → 4h)
+loss_streak_long                   = 8
+loss_streak_long_window_min        = 60
+loss_streak_long_cooldown_min      = 240
+# 15 losses in one day → 24h cooldown (was 6 → 24h)
+daily_loss_count                   = 15
+# 8% drawdown triggers flat-all (was 5%)
+auto_flat_drawdown_pct             = 8.0
+refresh_secs                       = 15
+equity_refresh_secs                = 60
+vol_spike_mult                     = 2.0
+news_panic_threshold               = -0.6
+news_euphoria_threshold            = 0.8
+# 2% daily gain ratchet (locks half the gain)
+daily_pnl_ratchet_pct              = 2.0
+
+[control]
+# Operator control panel. See docs/CONTROL.md.
+telegram_commands_enabled = false
+allowed_user_ids          = []
+poll_secs                 = 3
+
+[quant]
+# Quantitative engine — Kelly, vol-targeting, VaR, IC, Kalman.
+# This replaces fixed % sizing with mathematically optimal position sizing.
+enabled                = true
+kelly_cap              = 0.25     # Max Kelly fraction (half-Kelly = conservative)
+kelly_min_trades       = 20       # Min closed trades before Kelly activates
+target_vol_annual      = 0.15     # 15% annualized vol target
+max_vol_multiplier     = 2.0      # Max vol-target scale factor
+vol_window             = 60       # Candles for realized vol calculation
+var_confidence         = 0.95     # 95% VaR confidence level
+max_var_pct            = 0.03     # Max 3% of equity at risk per trade (CVaR)
+ic_window              = 50       # Observations for rolling IC
+ic_min_abs             = 0.05     # Min |IC| for confidence adjustment
+ic_max_boost           = 10       # Max +/- confidence points from IC
+kalman_process_noise   = 0.01     # Kalman filter Q (lower = smoother)
+kalman_measurement_noise = 1.0   # Kalman filter R (higher = less reactive)
+kalman_min_velocity_bps = 3.0    # Min |velocity| in bps for trend signal
+
+[screening]
+# Multi-indicator pre-screening for ScreenedVwapScalp strategy.
+# Symbols that fail screening are not traded.
+enabled                    = false   # disabled by default — opt-in per overlay
+min_vote_fraction          = 0.6     # fraction of indicators that must agree (0.0–1.0)
+ema_fast                   = 9
+ema_slow                   = 21
+adx_period                 = 14
+adx_min_trend              = 20.0    # ADX floor for trend confirmation
+rsi_period                 = 14
+rsi_overbought             = 70.0
+rsi_oversold               = 30.0
+volume_ma_period           = 20
+volume_spike_factor        = 1.5     # current volume / MA must exceed this
+atr_period                 = 14
+spread_max_atr_fraction    = 0.1     # max spread as fraction of ATR

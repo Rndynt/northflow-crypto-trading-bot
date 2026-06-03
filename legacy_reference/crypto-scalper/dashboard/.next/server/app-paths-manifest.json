@@ -1,0 +1,14 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
+  "/(dashboard)/config/page": "app/(dashboard)/config/page.js",
+  "/(dashboard)/lessons/page": "app/(dashboard)/lessons/page.js",
+  "/(dashboard)/overview/page": "app/(dashboard)/overview/page.js",
+  "/(dashboard)/screening/page": "app/(dashboard)/screening/page.js",
+  "/(dashboard)/signals/page": "app/(dashboard)/signals/page.js",
+  "/(dashboard)/positions/page": "app/(dashboard)/positions/page.js",
+  "/(dashboard)/survival/page": "app/(dashboard)/survival/page.js",
+  "/(dashboard)/strategies/page": "app/(dashboard)/strategies/page.js",
+  "/(dashboard)/trades/page": "app/(dashboard)/trades/page.js",
+  "/(dashboard)/control/page": "app/(dashboard)/control/page.js"
+}

@@ -1,0 +1,164 @@
+# ============================================================
+# AGGRESSIVE — HFT paper trading, high risk, full autonomy
+# ============================================================
+
+[mode]
+run_mode                  = "paper"
+dry_run                   = true
+fail_closed_without_llm   = false
+single_position_per_symbol = true   # FIXED: was false — caused duplicate entries
+
+[exchange]
+name            = "binance"
+market          = "futures"
+rest_base_url   = "https://fapi.binance.com"
+ws_base_url     = "wss://fstream.binance.com/stream"
+api_key         = ""          # set via env BINANCE_API_KEY
+api_secret      = ""          # set via env BINANCE_API_SECRET
+recv_window_ms  = 5000
+open_type       = "cross"
+leverage        = 100
+position_mode   = "dual-side"
+
+[pairs]
+symbols    = ["BTCUSDT"]
+timeframes = ["1m","15m"]
+
+[strategy]
+mode                = "adaptive"
+active              = ["ema_ribbon", "vwap_scalp", "squeeze", "screened_vwap_scalp"]
+min_ta_confidence   = 52    # quant strategies emit 62-72, need room for VPIN penalty
+paper_scout_enabled = false
+
+[advanced_alpha]
+enabled                  = false
+min_abs_score            = 0.20
+reduce_confidence_delta  = 5
+feed_max_age_secs        = 180
+kalman_process_noise     = 0.01
+kalman_measurement_noise = 1.0
+
+[llm]
+provider        = "openai"
+model           = "mimo-v2.5-pro"
+api_key         = ""          # set via env LLM_API_KEY
+api_base        = "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions"
+http_referer    = "https://github.com/whaledecoder/crypto-scalper"
+http_app_title  = "ARIA Crypto Scalper"
+timeout_secs    = 120
+min_confidence  = 52    # aligned with ta threshold
+fallback_ta_threshold = 60
+max_tokens      = 4096
+
+[manager]
+enabled               = true
+provider              = "openai"
+api_base              = "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions"
+model                 = "mimo-v2.5-pro"
+timeout_secs          = 120
+max_tokens            = 400
+fast_approve_min_conf = 55
+http_referer          = "https://github.com/whaledecoder/crypto-scalper"
+http_app_title        = "ARIA TraderManager"
+fail_open_on_error    = false  # FIXED: was true — don't auto-approve on LLM error
+
+[risk]
+equity_usd                = 1000.0
+risk_per_trade_pct        = 5.0    # REDUCED: was 2% — 1% risk per trade is standard
+max_open_positions        = 3      # REDUCED: was 5 — $300 equity, max 2 concurrent positions
+max_daily_loss_pct        = 50.0    # TIGHTENED: was 5% — protect capital
+max_drawdown_pct          = 70.0    # TIGHTENED: was 10%
+max_leverage              = 100
+max_spread_pct            = 0.08   # TIGHTENED: was 0.1
+min_reward_risk           = 1.5    # 1.4 minimum — screened_vwap targets 2.0
+min_net_edge_bps          = 0.0    # disabled: paper mode, no real costs
+max_position_notional_pct = 150.0  # REDUCED: was 200%
+assumed_daily_volume_usd  = 1_000_000_000.0
+min_margin_usd            = 0.0
+max_hold_secs             = 3600  # 60-minute max hold; /hold can override at runtime
+
+[schedule]
+dead_zone_start_hour_wib = 0
+dead_zone_end_hour_wib   = 0
+
+[feeds]
+cryptopanic_api_key = ""
+lunarcrush_api_key  = ""
+glassnode_api_key   = ""
+whalealert_api_key  = ""
+deribit_base_url    = "https://www.deribit.com"
+rss_feeds = [
+    "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "https://decrypt.co/feed",
+    "https://cointelegraph.com/rss",
+]
+
+[monitoring]
+telegram_bot_token = ""    # env TELEGRAM_BOT_TOKEN
+telegram_chat_id   = ""    # env TELEGRAM_CHAT_ID
+log_level          = "info"
+db_path            = "trades.db"
+metrics_bind       = "0.0.0.0:7999"
+
+[backtest]
+data_dir              = "data/historical"
+from_ts               = ""
+to_ts                 = ""
+fee_bps               = 4.0
+slippage_bps          = 2.0
+market_impact_bps     = 1.0
+trading_days_per_year = 365.0
+trades_per_day        = 12.0
+
+[survival]
+enabled                        = true
+death_line_pct                 = 0.40   # TIGHTENED: was 0.50 — stop at -60% drawdown
+loss_streak_short              = 3      # TIGHTENED: was 5 — 3 losses → cooldown
+loss_streak_short_cooldown_min = 30     # RAISED: was 15 — longer cooldown
+loss_streak_long               = 5      # TIGHTENED: was 8
+loss_streak_long_window_min    = 60
+loss_streak_long_cooldown_min  = 120    # RAISED: was 60 — serious cooldown
+daily_loss_count               = 6      # TIGHTENED: was 10
+auto_flat_drawdown_pct         = 5.0    # TIGHTENED: was 8%
+refresh_secs                   = 10
+equity_refresh_secs            = 30
+vol_spike_mult                 = 2.5    # TIGHTENED: was 3.0
+news_panic_threshold           = -0.7
+news_euphoria_threshold        = 0.8
+daily_pnl_ratchet_pct          = 1.5    # TIGHTENED: was 2% — protect smaller gains
+
+[control]
+telegram_commands_enabled = true
+allowed_user_ids          = [7773988648]
+poll_secs                 = 2
+
+[quant]
+enabled                  = true
+kelly_cap                = 0.15    # REDUCED: was 0.20 — more conservative sizing
+kelly_min_trades         = 20
+target_vol_annual        = 0.30
+max_vol_multiplier       = 2.0
+vol_window               = 30
+var_confidence           = 0.95
+max_var_pct              = 0.05
+ic_window                = 30
+ic_min_abs               = 0.03
+ic_max_boost             = 10
+kalman_process_noise     = 0.005
+kalman_measurement_noise = 0.5
+kalman_min_velocity_bps  = 2.0
+
+[screening]
+enabled               = true
+min_vote_fraction     = 0.5
+ema_fast              = 9
+ema_slow              = 21
+adx_period            = 14
+adx_min_trend         = 18.0
+rsi_period            = 14
+rsi_overbought        = 72.0
+rsi_oversold          = 28.0
+volume_ma_period      = 20
+volume_spike_factor   = 1.3
+atr_period            = 14
+spread_max_atr_fraction = 0.15

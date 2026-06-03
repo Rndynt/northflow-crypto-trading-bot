@@ -1,0 +1,699 @@
+//! TraderManagerAgent — head-of-desk LLM specialist that approves,
+//! vetoes, or adjusts every signal coming out of the BrainAgent.
+//!
+//! Inputs:
+//!   - The BrainAgent's `TradeDecision` (already a Go).
+//!   - The RiskAgent's verdict (size, lessons matched).
+//!   - Active learning lessons (from the policy).
+//!   - Recent feed snapshot (for narrative context).
+//!   - Open positions count (for global risk feel).
+//!
+//! Outputs: `ManagerVerdict` with `Approve` | `Veto` | `Adjust(...)`.
+//!
+//! Disable the manager by leaving the API key empty — it then defaults
+//! to `Approve` for every Go decision (zero extra cost).
+
+use crate::agents::MessageBus;
+use crate::agents::messages::{
+    AgentEvent, AgentId, BrainOutcome, ManagerAction, ManagerProposal, ManagerVerdict,
+    SurvivalMode, SurvivalState,
+};
+use crate::feeds::ExternalSnapshot;
+use crate::learning::LearningPolicy;
+use crate::llm::engine::Decision;
+use parking_lot::{Mutex as PlMutex, RwLock as PlRwLock};
+use reqwest::Client;
+use serde::Deserialize;
+use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::task::JoinHandle;
+use tracing::{info, warn};
+
+/// Configuration for the manager LLM. Mirrors `LlmEngineConfig` but kept
+/// separate so the manager can use a different (cheaper / smarter) model
+/// than the brain.
+pub struct ManagerAgentConfig {
+    pub enabled: bool,
+    pub provider: String, // "openrouter" | "anthropic"
+    pub api_base: String,
+    pub api_key: String,
+    pub model: String,
+    pub timeout_secs: u64,
+    pub max_tokens: u32,
+    pub http_referer: Option<String>,
+    pub http_app_title: Option<String>,
+    /// Approve everything below this confidence delta without an LLM call.
+    /// (Optimisation: if Brain conf >= this and no lessons matched,
+    /// skip the manager call to save tokens.)
+    pub fast_approve_min_conf: u8,
+    pub fail_closed_without_llm: bool,
+    pub fail_open_on_error: bool,
+}
+
+fn manager_off_action(
+    brain_offline_fallback: bool,
+    fail_closed_without_llm: bool,
+) -> ManagerAction {
+    // For autonomous HFT: when the manager is disabled (key empty), ALWAYS
+    // approve.  The brain LLM already provides analysis — the manager is
+    // an optional second opinion, not a gatekeeper.  Only fail-closed when
+    // BOTH the manager AND the brain are offline (total LLM blackout).
+    if fail_closed_without_llm && brain_offline_fallback {
+        ManagerAction::Veto {
+            reason: "all LLMs unavailable; failing closed".into(),
+        }
+    } else {
+        ManagerAction::Approve
+    }
+}
+
+impl Default for ManagerAgentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: "openrouter".into(),
+            api_base: "https://openrouter.ai/api/v1/chat/completions".into(),
+            api_key: String::new(),
+            model: "anthropic/claude-3.5-haiku".into(),
+            timeout_secs: 6,
+            max_tokens: 600,
+            http_referer: None,
+            http_app_title: None,
+            fast_approve_min_conf: 90,
+            fail_closed_without_llm: false,
+            fail_open_on_error: false,
+        }
+    }
+}
+
+pub fn spawn(
+    bus: MessageBus,
+    cfg: ManagerAgentConfig,
+    policy: LearningPolicy,
+    feeds_cache: Arc<PlRwLock<HashMap<String, ExternalSnapshot>>>,
+) -> JoinHandle<()> {
+    let mut rx = bus.subscribe();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(cfg.timeout_secs.max(2)))
+        .build()
+        .expect("manager http client");
+    let cfg = Arc::new(cfg);
+    let survival: Arc<PlMutex<Option<SurvivalState>>> = Arc::new(PlMutex::new(None));
+
+    tokio::spawn(async move {
+        info!(
+            enabled = cfg.enabled,
+            model = %cfg.model,
+            "manager agent starting"
+        );
+        crate::agents::heartbeat::spawn(bus.clone(), AgentId::Manager);
+        loop {
+            let ev = match rx.recv().await {
+                Ok(ev) => ev,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    warn!(skipped = n, "broadcast lagged — skipping events");
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            };
+            match ev {
+                AgentEvent::Shutdown => break,
+                AgentEvent::SurvivalUpdated(s) => {
+                    *survival.lock() = Some(s);
+                }
+                AgentEvent::BrainOutcomeReady(brain) => {
+                    if brain.decision.decision != Decision::Go {
+                        // Brain already said no — nothing for manager to do.
+                        continue;
+                    }
+                    let proposal = build_proposal(&brain);
+                    let started = Instant::now();
+                    let manager_off = !cfg.enabled || cfg.api_key.is_empty();
+                    let surv_snapshot = survival.lock().clone();
+                    info!(
+                        symbol = %proposal.symbol,
+                        side = %proposal.side.as_str(),
+                        strategy = %proposal.strategy,
+                        regime = %proposal.regime,
+                        brain_confidence = proposal.llm_confidence,
+                        ta_confidence = proposal.ta_confidence,
+                        size = proposal.size,
+                        manager_enabled = cfg.enabled,
+                        "manager: reviewing brain-approved setup"
+                    );
+                    // Survival hard-veto: if Frozen/Dead, skip the LLM
+                    // entirely and refuse the trade.
+                    if let Some(s) = &surv_snapshot {
+                        if matches!(s.mode, SurvivalMode::Frozen | SurvivalMode::Dead) {
+                            bus.publish(AgentEvent::ManagerVerdictEmitted(ManagerVerdict {
+                                proposal: proposal.clone(),
+                                action: ManagerAction::Veto {
+                                    reason: format!(
+                                        "survival mode {} (score {})",
+                                        s.mode.as_str(),
+                                        s.score
+                                    ),
+                                },
+                                latency_ms: 0,
+                                offline_fallback: true,
+                                brain_outcome: brain,
+                            }));
+                            continue;
+                        }
+                    }
+                    let fast_approve = brain.decision.confidence >= cfg.fast_approve_min_conf
+                        && brain.risk.matched_lessons.is_empty()
+                        && surv_snapshot
+                            .as_ref()
+                            .map(|s| matches!(s.mode, SurvivalMode::Healthy))
+                            .unwrap_or(true);
+                    let action = if manager_off {
+                        manager_off_action(brain.offline_fallback, cfg.fail_closed_without_llm)
+                    } else if fast_approve {
+                        ManagerAction::Approve
+                    } else {
+                        match call_manager_llm(
+                            &client,
+                            &cfg,
+                            &proposal,
+                            &brain,
+                            &policy,
+                            &feeds_cache,
+                            surv_snapshot.as_ref(),
+                        )
+                        .await
+                        {
+                            Ok(a) => a,
+                            Err(e) => {
+                                if cfg.fail_open_on_error && !cfg.fail_closed_without_llm {
+                                    warn!(
+                                        error = %e,
+                                        "manager LLM failed — approving per fail-open config"
+                                    );
+                                    ManagerAction::Approve
+                                } else {
+                                    warn!(
+                                        error = %e,
+                                        "manager LLM failed — failing CLOSED with Veto"
+                                    );
+                                    ManagerAction::Veto {
+                                        reason: "manager LLM unavailable; failing closed".into(),
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    let latency = started.elapsed().as_millis() as u64;
+                    info!(
+                        symbol = %proposal.symbol,
+                        action = ?action,
+                        latency_ms = latency,
+                        reason = %manager_action_summary(&action),
+                        "manager verdict"
+                    );
+                    bus.publish(AgentEvent::ManagerVerdictEmitted(ManagerVerdict {
+                        proposal,
+                        action,
+                        latency_ms: latency,
+                        offline_fallback: manager_off,
+                        brain_outcome: brain,
+                    }));
+                }
+                _ => {}
+            }
+        }
+    })
+}
+
+fn build_proposal(brain: &BrainOutcome) -> ManagerProposal {
+    // Use the RISK-MANAGED signal (with capped SL/TP) instead of raw signal
+    let signal = &brain.risk.signal;
+    ManagerProposal {
+        signal_id: signal.signal_id.clone(),
+        symbol: signal.symbol.clone(),
+        side: signal.side,
+        strategy: signal.strategy.as_str().to_string(),
+        regime: brain.regime.as_str().to_string(),
+        entry: brain
+            .decision
+            .entry_price
+            .filter(|&p| p > 0.0)
+            .unwrap_or(signal.entry),
+        stop_loss: signal.stop_loss,
+        take_profit: signal.take_profit,
+        size: brain.risk.size,
+        ta_confidence: signal.ta_confidence,
+        llm_confidence: brain.decision.confidence,
+        atr: signal.atr,
+    }
+}
+
+fn manager_action_summary(action: &ManagerAction) -> String {
+    match action {
+        ManagerAction::Approve => "approve".to_string(),
+        ManagerAction::Veto { reason } => format!("veto: {reason}"),
+        ManagerAction::Adjust {
+            size_multiplier,
+            sl_offset_bps,
+            tp_offset_bps,
+            reason,
+        } => format!(
+            "adjust size_x={size_multiplier:.2} sl_bps={sl_offset_bps:.1} tp_bps={tp_offset_bps:.1}: {reason}"
+        ),
+    }
+}
+
+const MANAGER_SYSTEM_PROMPT: &str = r#"You are the Trader-Manager for ARIA, an autonomous
+crypto scalping bot. Your role is to evaluate trade proposals from the
+Brain Agent and make a final decision.
+
+Your default bias is **Approve** when the setup is reasonable. You are
+an execution enabler, not a gatekeeper. The Brain Agent and Risk Agent
+have already done their analysis — your job is to catch obvious
+contradictions, not to second-guess every trade.
+
+MISSION: Grow equity. ROE and net PnL are the only metrics that matter —
+win rate is irrelevant. A bot that doesn't trade earns nothing. Size down
+when uncertain; only Veto what is genuinely broken.
+
+SIGNAL QUALITY — evaluate COMBINED strength, not win rate history:
+- TA_score and regime aligned: strong → Approve full size.
+- TA > 60 but sentiment conflicting: mixed → Adjust to 0.7x.
+- Composite < 30 AND regime contradicts direction: truly broken → Veto.
+- Confidence delta (llm_conf >> ta_conf by >25pts): Adjust to 0.8x only.
+
+REGIME-AWARE SIZING:
+- Trending regime + trend strategy: full size — don't veto prematurely.
+- Ranging regime + mean-reversion: Approve with tighter stops.
+- Volatile/Squeeze + medium conviction: Adjust 0.5–0.7x, still GO.
+- ANY regime + learning history is negative → Adjust 0.5x, still GO.
+
+CONVICTION-BASED SIZING (use Adjust, not Veto):
+- Brain confidence ≥ 70: Approve full size
+- Brain confidence 50–69: Adjust to 0.7–0.8x
+- Brain confidence < 50: Adjust to 0.4x (still GO — let it trade smaller)
+- Survival mode Defensive: cap at 0.5x regardless
+
+Approve when:
+  1. TA + regime are not directly contradicting each other
+  2. Risk/reward ≥ 1.0
+  NOTE: Poor WR, negative learning history, or low confidence are NOT
+  Veto reasons — they are Adjust reasons. The bot must keep trading.
+
+Veto ONLY when ALL three are true simultaneously:
+  - Brain reasoning directly contradicts regime direction
+  - AND Risk/reward < 0.7 (loss nearly guaranteed after costs)
+  - AND Composite score < 30 (objectively terrible setup)
+  If only ONE or TWO conditions are met → Adjust, not Veto.
+
+Think: "Missed trades have zero upside. Bad-sized trades can be recovered.
+Only veto what a rational human trader would walk away from entirely."
+
+You MUST respond with a strict JSON object, no commentary, of the form:
+
+{
+  "action": "approve",
+  "reason": "concise <120 chars rationale"
+}
+
+OR
+
+{
+  "action": "veto",
+  "reason": "concise <120 chars rationale"
+}
+
+OR
+
+{
+  "action": "adjust",
+  "size_multiplier": 0.5,
+  "sl_offset_bps": -10.0,
+  "tp_offset_bps": 5.0,
+  "reason": "concise <120 chars rationale"
+}
+
+`size_multiplier` ∈ [0.1, 1.5]. `sl_offset_bps` and `tp_offset_bps` are
+adjustments in basis points (negative = move SL closer / TP closer).
+Output ONLY the JSON object."#;
+
+fn build_manager_user_prompt(
+    proposal: &ManagerProposal,
+    brain: &BrainOutcome,
+    policy: &LearningPolicy,
+    feeds_cache: &PlRwLock<HashMap<String, ExternalSnapshot>>,
+    survival: Option<&SurvivalState>,
+) -> String {
+    let lessons = policy.active_lessons();
+    let mut s = String::new();
+    if let Some(surv) = survival {
+        s.push_str("[SURVIVAL STATE]\n");
+        s.push_str(&format!(
+            "  mode={} score={}/100 size_multiplier={:.2}\n",
+            surv.mode.as_str(),
+            surv.score,
+            surv.size_multiplier
+        ));
+        s.push_str(&format!(
+            "  equity=${:.2} initial=${:.2} death_line=${:.2} drawdown={:.2}%\n",
+            surv.equity_usd, surv.initial_equity_usd, surv.death_line_usd, surv.drawdown_pct
+        ));
+        s.push_str(&format!(
+            "  realized_today=${:.2} ({:+.2}%) consecutive_losses={}\n",
+            surv.realized_pnl_today, surv.realized_pnl_pct_today, surv.consecutive_losses
+        ));
+        let trades_to_die = if proposal.size > 0.0 {
+            let avg_loss = proposal.size * (proposal.entry - proposal.stop_loss).abs();
+            let buffer = (surv.equity_usd - surv.death_line_usd).max(0.0);
+            if avg_loss > 0.0 {
+                (buffer / avg_loss) as i64
+            } else {
+                999
+            }
+        } else {
+            999
+        };
+        s.push_str(&format!(
+            "  trades_to_die_at_current_size={}\n",
+            trades_to_die
+        ));
+        if !surv.reasons.is_empty() {
+            s.push_str("  active reasons:\n");
+            for r in &surv.reasons {
+                s.push_str(&format!("    - {r}\n"));
+            }
+        }
+        s.push('\n');
+    }
+    s.push_str("[PROPOSAL]\n");
+    s.push_str(&format!(
+        "  symbol={} side={} strategy={} regime={}\n",
+        proposal.symbol,
+        proposal.side.as_str(),
+        proposal.strategy,
+        proposal.regime
+    ));
+    s.push_str(&format!(
+        "  entry={:.4} sl={:.4} tp={:.4} size={:.6}\n",
+        proposal.entry, proposal.stop_loss, proposal.take_profit, proposal.size
+    ));
+    s.push_str(&format!(
+        "  ta_conf={} llm_conf={}\n",
+        proposal.ta_confidence, proposal.llm_confidence
+    ));
+    s.push_str(&format!(
+        "  rr_target = {:.2}\n",
+        ((proposal.take_profit - proposal.entry).abs())
+            / (proposal.entry - proposal.stop_loss).abs().max(1e-9)
+    ));
+
+    s.push_str("\n[BRAIN AGENT REASONING]\n");
+    s.push_str(&format!(
+        "  decision={:?} ta_score={:.1} microstructure_score={:.1} composite={:.1}\n",
+        brain.decision.decision,
+        brain.decision.market_context_score.ta_score,
+        brain.decision.market_context_score.microstructure_score,
+        brain.decision.market_context_score.composite_score
+    ));
+    s.push_str(&format!(
+        "  summary: {}\n",
+        brain.decision.reasoning.summary
+    ));
+    s.push_str(&format!(
+        "  risks: {}\n",
+        brain.decision.reasoning.risk_factors
+    ));
+    s.push_str(&format!(
+        "  invalidation: {}\n",
+        brain.decision.reasoning.invalidation
+    ));
+
+    s.push_str("\n[RISK AGENT]\n");
+    s.push_str(&format!(
+        "  base_size_multiplier={:.2} ta_threshold_eff={} llm_floor_eff={} matched_lessons={:?}\n",
+        brain.risk.size_multiplier,
+        brain.risk.effective_ta_threshold,
+        brain.risk.effective_llm_floor,
+        brain.risk.matched_lessons
+    ));
+
+    s.push_str("\n[LEARNING AGENT]\n");
+    let summary = policy.historical_summary(&proposal.strategy, &proposal.regime, &proposal.symbol);
+    if summary.is_empty() {
+        s.push_str("  no history yet — cold start\n");
+    } else {
+        for line in summary.lines() {
+            s.push_str(&format!("  {line}\n"));
+        }
+    }
+    if !lessons.is_empty() {
+        s.push_str("  active lessons:\n");
+        for l in lessons.iter().take(8) {
+            s.push_str(&format!("    - {:?}: {}\n", l.kind, l.reason));
+        }
+    }
+
+    s.push_str("\n[FEEDS AGENT]\n");
+    let cache = feeds_cache.read();
+    if let Some(snap) = cache.get(&proposal.symbol) {
+        if let Some(fg) = &snap.fear_greed {
+            s.push_str(&format!(
+                "  fear&greed: {} ({})\n",
+                fg.value,
+                fg.label.as_str()
+            ));
+        }
+        if let Some(f) = &snap.funding {
+            s.push_str(&format!("  funding rate: {}\n", f.rate));
+        }
+        if let Some(news) = &snap.news {
+            s.push_str(&format!(
+                "  news: net_score={:+.2} ({} items)\n",
+                news.net_score,
+                news.items.len()
+            ));
+        }
+        if let Some(sent) = &snap.sentiment {
+            s.push_str(&format!("  social sentiment: {:.2}\n", sent.sentiment));
+        }
+    } else {
+        s.push_str("  feeds unavailable\n");
+    }
+
+    s.push_str("\nDecide.\n");
+    s
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+enum ManagerActionDe {
+    Approve {
+        #[serde(default)]
+        #[allow(dead_code)]
+        reason: String,
+    },
+    Veto {
+        #[serde(default)]
+        reason: String,
+    },
+    Adjust {
+        size_multiplier: Option<f64>,
+        sl_offset_bps: Option<f64>,
+        tp_offset_bps: Option<f64>,
+        #[serde(default)]
+        reason: String,
+    },
+}
+
+impl From<ManagerActionDe> for ManagerAction {
+    fn from(value: ManagerActionDe) -> Self {
+        match value {
+            ManagerActionDe::Approve { .. } => ManagerAction::Approve,
+            ManagerActionDe::Veto { reason } => ManagerAction::Veto { reason },
+            ManagerActionDe::Adjust {
+                size_multiplier,
+                sl_offset_bps,
+                tp_offset_bps,
+                reason,
+            } => ManagerAction::Adjust {
+                size_multiplier: size_multiplier.unwrap_or(1.0).clamp(0.5, 1.5),
+                sl_offset_bps: sl_offset_bps.unwrap_or(0.0).clamp(-50.0, 50.0),
+                tp_offset_bps: tp_offset_bps.unwrap_or(0.0).clamp(-50.0, 50.0),
+                reason,
+            },
+        }
+    }
+}
+
+pub fn parse_manager_response(raw: &str) -> Option<ManagerAction> {
+    let cleaned = strip_code_fences(raw);
+    if let Ok(de) = serde_json::from_str::<ManagerActionDe>(&cleaned) {
+        return Some(de.into());
+    }
+    // Fallback: scan for the first JSON object.
+    let bytes = cleaned.as_bytes();
+    let start = bytes.iter().position(|&b| b == b'{')?;
+    let mut depth = 0i32;
+    let mut end = None;
+    for (i, &b) in bytes.iter().enumerate().skip(start) {
+        match b {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(i + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let slice = &cleaned[start..end?];
+    serde_json::from_str::<ManagerActionDe>(slice)
+        .ok()
+        .map(Into::into)
+}
+
+fn strip_code_fences(s: &str) -> String {
+    let s = s.trim();
+    let s = s.strip_prefix("```json").unwrap_or(s);
+    let s = s.strip_prefix("```").unwrap_or(s);
+    let s = s.strip_suffix("```").unwrap_or(s);
+    s.trim().to_string()
+}
+
+async fn call_manager_llm(
+    client: &Client,
+    cfg: &ManagerAgentConfig,
+    proposal: &ManagerProposal,
+    brain: &BrainOutcome,
+    policy: &LearningPolicy,
+    feeds_cache: &PlRwLock<HashMap<String, ExternalSnapshot>>,
+    survival: Option<&SurvivalState>,
+) -> anyhow::Result<ManagerAction> {
+    let user = build_manager_user_prompt(proposal, brain, policy, feeds_cache, survival);
+
+    let body: Value = if cfg.provider.eq_ignore_ascii_case("anthropic") {
+        json!({
+            "model": cfg.model,
+            "max_tokens": cfg.max_tokens,
+            "system": MANAGER_SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": user}]
+        })
+    } else {
+        json!({
+            "model": cfg.model,
+            "max_completion_tokens": cfg.max_tokens,
+            "thinking": { "type": "disabled" },
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": MANAGER_SYSTEM_PROMPT},
+                {"role": "user", "content": user}
+            ]
+        })
+    };
+
+    let mut req = client.post(&cfg.api_base).json(&body);
+    if cfg.provider.eq_ignore_ascii_case("anthropic") {
+        req = req
+            .header("x-api-key", &cfg.api_key)
+            .header("anthropic-version", "2023-06-01");
+    } else {
+        req = req.header("api-key", &cfg.api_key);
+        if let Some(r) = &cfg.http_referer {
+            req = req.header("HTTP-Referer", r);
+        }
+        if let Some(t) = &cfg.http_app_title {
+            req = req.header("X-Title", t);
+        }
+    }
+
+    let resp = req.send().await?;
+    let status = resp.status();
+    let raw = resp.text().await?;
+    if !status.is_success() {
+        anyhow::bail!("manager LLM HTTP {status}: {raw}");
+    }
+
+    // Both Anthropic and OpenAI-compatible put the text inside a known path.
+    // MiMo reasoning models may put the response in reasoning_content instead.
+    let v: Value = serde_json::from_str(&raw)?;
+    let text = if cfg.provider.eq_ignore_ascii_case("anthropic") {
+        v["content"][0]["text"].as_str().unwrap_or("").to_string()
+    } else {
+        let msg = &v["choices"][0]["message"];
+        msg["content"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .or_else(|| msg["reasoning_content"].as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+
+    parse_manager_response(&text)
+        .ok_or_else(|| anyhow::anyhow!("manager LLM response not parseable: {text}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_approve() {
+        let a = parse_manager_response(r#"{"action":"approve","reason":"strong setup"}"#).unwrap();
+        assert!(matches!(a, ManagerAction::Approve));
+    }
+
+    #[test]
+    fn parses_veto_with_fence() {
+        let raw = "```json\n{\"action\":\"veto\",\"reason\":\"news risk\"}\n```";
+        let a = parse_manager_response(raw).unwrap();
+        match a {
+            ManagerAction::Veto { reason } => assert_eq!(reason, "news risk"),
+            _ => panic!("expected veto"),
+        }
+    }
+
+    #[test]
+    fn parses_adjust_clamped() {
+        let raw = r#"{
+            "action":"adjust",
+            "size_multiplier":2.5,
+            "sl_offset_bps":-200.0,
+            "tp_offset_bps":15.0,
+            "reason":"trim size"
+        }"#;
+        let a = parse_manager_response(raw).unwrap();
+        match a {
+            ManagerAction::Adjust {
+                size_multiplier,
+                sl_offset_bps,
+                tp_offset_bps,
+                ..
+            } => {
+                assert_eq!(size_multiplier, 1.5);
+                assert_eq!(sl_offset_bps, -50.0);
+                assert_eq!(tp_offset_bps, 15.0);
+            }
+            _ => panic!("expected adjust"),
+        }
+    }
+
+    #[test]
+    fn manager_off_fails_closed_when_brain_is_ta_only_in_live_mode() {
+        assert!(matches!(
+            manager_off_action(true, true),
+            ManagerAction::Veto { .. }
+        ));
+        assert!(matches!(
+            manager_off_action(true, false),
+            ManagerAction::Approve
+        ));
+        assert!(matches!(
+            manager_off_action(false, true),
+            ManagerAction::Approve
+        ));
+    }
+}

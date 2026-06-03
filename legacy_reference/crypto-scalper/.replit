@@ -1,0 +1,69 @@
+modules = ["rust-stable", "nodejs-20", "web"]
+[agent]
+expertMode = true
+stack = "BEST_EFFORT_FALLBACK"
+
+[nix]
+channel = "stable-25_05"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 7999
+externalPort = 3000
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Dashboard"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cargo build && ./target/debug/aria"
+waitForPort = 8000
+
+[[workflows.workflow]]
+name = "Dashboard"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd dashboard && pnpm start"
+waitForPort = 5000
+
+[deployment]
+deploymentTarget = "vm"
+run = ["bash", "-c", "ARIA_CONFIG_OVERLAY=config/aggressive.toml ./target/release/aria"]
+build = ["cargo", "build", "--release"]
+
+[userenv]
+
+[userenv.shared]
+RUST_LOG = "info"

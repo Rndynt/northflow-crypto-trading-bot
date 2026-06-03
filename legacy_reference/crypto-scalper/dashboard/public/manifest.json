@@ -1,0 +1,11 @@
+{
+  "name": "ARIA Dashboard",
+  "short_name": "ARIA",
+  "description": "Autonomous Realtime Intelligence Analyst — Crypto Trading Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "landscape-primary",
+  "icons": []
+}
