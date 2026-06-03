@@ -2,7 +2,7 @@
 
 A pure Rust CLI and library for deterministic, research-first crypto strategy backtesting.
 
-## Current phase: Phase 4 — Strategy Engine ✓
+## Current phase: Phase 5 — Risk and Cost Model ✓
 
 | Phase | Status |
 |---|---|
@@ -10,11 +10,57 @@ A pure Rust CLI and library for deterministic, research-first crypto strategy ba
 | Phase 2 — Market Data (OHLCV loader, timeframe builder, data quality) | ✅ Complete |
 | Phase 3 — Indicators (EMA 8/21/50/200, ATR 14, VWAP, Volume SMA 20) | ✅ Complete |
 | Phase 4 — Strategy Engine (screened_vwap_scalp) | ✅ Complete |
-| Phase 5 — Risk & Cost model | ⏳ Pending |
+| Phase 5 — Risk & Cost model | ✅ Implemented |
 | Phase 6 — Backtest engine | ⏳ Pending |
 | Phase 7 — Reports & Attribution | ⏳ Pending |
 
 See `docs/ROADMAP.md` for full roadmap and architecture decisions.
+
+---
+
+## Phase 5 risk and cost model
+
+Phase 5 validates a `Signal` against risk limits and calculates a safe theoretical quantity.
+
+**Risk model output: `RiskAssessment` only.**  
+No orders. No fills. No positions. No backtest execution. No profitability claims.
+
+### Position sizing
+
+```
+risk_amount         = equity × risk_per_trade_pct / 100
+qty_by_risk         = risk_amount / |entry − stop_loss|
+max_qty_by_leverage = equity × max_leverage / entry
+qty                 = min(qty_by_risk, max_qty_by_leverage)
+```
+
+### Cost model components
+
+| Component | Formula |
+|---|---|
+| Entry fee | `entry_notional × taker_fee_bps / 10000` |
+| Exit fee | `exit_notional × taker_fee_bps / 10000` |
+| Spread | `avg_notional × spread_bps / 10000` |
+| Slippage | `avg_notional × slippage_bps / 10000 × 2` |
+| Market impact | `avg_notional × market_impact_bps / 10000` |
+| Stop slippage | `avg_notional × stop_slippage_bps / 10000` |
+
+`total_expected_cost` excludes stop slippage. `total_adverse_cost` includes it.
+
+### Risk guards
+
+| Guard | Reject condition |
+|---|---|
+| Max open positions | `open_positions >= max_open_positions` |
+| Daily loss | `abs(min(daily_pnl, 0)) / equity × 100 >= max_daily_loss_pct` |
+| Max drawdown | `(peak − equity) / peak × 100 >= max_drawdown_pct` |
+| Min reward/risk | `signal.reward_risk() < min_reward_risk` |
+| Net edge | `expected_reward_bps − total_adverse_cost_bps <= 0` |
+
+Normal guard rejection returns `Ok(RiskAssessment { approved: false, .. })`.  
+Invalid input (bad signal geometry, invalid equity) returns `Err(NorthflowError)`.
+
+Paper and live modes remain disabled. No order creation. No fill simulation. No backtest execution.
 
 ---
 
@@ -23,7 +69,8 @@ See `docs/ROADMAP.md` for full roadmap and architecture decisions.
 The first active strategy is `screened_vwap_scalp`.
 
 **Strategy output: `Signal` only.**  
-No orders. No risk sizing. No backtest execution. No position creation.
+No orders. No risk sizing. No backtest execution. No position creation.  
+Strategy input candles are defensively validated at the start of `evaluate()`.
 
 ### Timeframe roles (explicit — never inferred from order)
 
@@ -61,8 +108,6 @@ No orders. No risk sizing. No backtest execution. No position creation.
 - Long: entry = close, SL = close − ATR, TP = close + ATR × 1.5
 - Short: entry = close, SL = close + ATR, TP = close − ATR × 1.5
 - Target reward/risk ≈ 1.5
-
-Paper and live modes remain disabled. No risk sizing yet. No order creation yet. No backtest execution yet.
 
 ---
 

@@ -26,6 +26,7 @@ taker_fee_bps = 4.0
 slippage_bps = 2.0
 spread_bps = 1.0
 market_impact_bps = 1.0
+stop_slippage_bps = 5.0
 
 [backtest]
 data_dir = "data/historical"

@@ -35,6 +35,7 @@ pub struct ResearchConfig {
     pub slippage_bps: f64,
     pub spread_bps: f64,
     pub market_impact_bps: f64,
+    pub stop_slippage_bps: f64,
     // backtest
     pub conservative_intrabar: bool,
     pub min_confidence: u8,
@@ -60,6 +61,7 @@ impl Default for ResearchConfig {
             slippage_bps: 2.0,
             spread_bps: 1.0,
             market_impact_bps: 1.0,
+            stop_slippage_bps: 5.0,
             conservative_intrabar: true,
             min_confidence: 65,
         }
@@ -111,6 +113,9 @@ impl ResearchConfig {
                 "market_impact_bps" => {
                     cfg.market_impact_bps = parse_f64(value, cfg.market_impact_bps)
                 }
+                "stop_slippage_bps" => {
+                    cfg.stop_slippage_bps = parse_f64(value, cfg.stop_slippage_bps)
+                }
                 "conservative_intrabar" => cfg.conservative_intrabar = value == "true",
                 "min_confidence" => {
                     cfg.min_confidence = value.parse().unwrap_or(cfg.min_confidence)
@@ -119,6 +124,29 @@ impl ResearchConfig {
             }
         }
         cfg
+    }
+
+    /// Build a RiskConfig from this ResearchConfig.
+    pub fn risk_config(&self) -> crate::risk::RiskConfig {
+        crate::risk::RiskConfig {
+            risk_per_trade_pct: self.risk_per_trade_pct,
+            max_open_positions: self.max_open_positions,
+            max_leverage: self.max_leverage,
+            min_reward_risk: self.min_reward_risk,
+            max_daily_loss_pct: self.max_daily_loss_pct,
+            max_drawdown_pct: self.max_drawdown_pct,
+        }
+    }
+
+    /// Build a CostModelConfig from this ResearchConfig.
+    pub fn cost_model_config(&self) -> crate::risk::CostModelConfig {
+        crate::risk::CostModelConfig {
+            taker_fee_bps: self.taker_fee_bps,
+            slippage_bps: self.slippage_bps,
+            spread_bps: self.spread_bps,
+            market_impact_bps: self.market_impact_bps,
+            stop_slippage_bps: self.stop_slippage_bps,
+        }
     }
 
     /// Validate that the three explicit timeframe roles match Phase 2 requirements:
@@ -243,5 +271,25 @@ mod tests {
         let mut cfg = default_cfg();
         cfg.confirmation_timeframe = "1h".to_string(); // wrong: confirmation must be 5m
         assert!(cfg.validate_timeframes().is_err());
+    }
+
+    #[test]
+    fn config_parses_stop_slippage_bps() {
+        let toml = "[cost]\nstop_slippage_bps = 7.5\n";
+        let cfg = ResearchConfig::parse(toml);
+        assert!((cfg.stop_slippage_bps - 7.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn default_stop_slippage_bps_is_positive() {
+        let cfg = ResearchConfig::default();
+        assert!(cfg.stop_slippage_bps > 0.0);
+    }
+
+    #[test]
+    fn cost_model_config_from_research_config_contains_stop_slippage() {
+        let cfg = ResearchConfig::default();
+        let cost = cfg.cost_model_config();
+        assert!((cost.stop_slippage_bps - cfg.stop_slippage_bps).abs() < 1e-9);
     }
 }
