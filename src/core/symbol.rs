@@ -17,14 +17,14 @@ impl Symbol {
             ));
         }
         if s.len() > MAX_SYMBOL_LEN {
-            return Err(NorthflowError::InvalidSignal(
-                format!("symbol '{s}' exceeds max length of {MAX_SYMBOL_LEN}"),
-            ));
+            return Err(NorthflowError::InvalidSignal(format!(
+                "symbol '{s}' exceeds max length of {MAX_SYMBOL_LEN}"
+            )));
         }
         if s.chars().any(|c| c.is_whitespace()) {
-            return Err(NorthflowError::InvalidSignal(
-                format!("symbol '{s}' must not contain whitespace"),
-            ));
+            return Err(NorthflowError::InvalidSignal(format!(
+                "symbol '{s}' must not contain whitespace"
+            )));
         }
         Ok(Self(s.to_uppercase()))
     }

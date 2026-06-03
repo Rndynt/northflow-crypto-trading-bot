@@ -3,11 +3,7 @@
 
 use std::fmt;
 
-use crate::core::{
-    side::Side,
-    signal::SignalId,
-    symbol::Symbol,
-};
+use crate::core::{side::Side, signal::SignalId, symbol::Symbol};
 
 // ── OrderId ──────────────────────────────────────────────────────────────────
 
@@ -44,12 +40,12 @@ pub enum OrderType {
 impl OrderType {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::MarketEntry      => "market_entry",
-            Self::LimitEntry       => "limit_entry",
-            Self::StopLoss         => "stop_loss",
-            Self::TakeProfit       => "take_profit",
+            Self::MarketEntry => "market_entry",
+            Self::LimitEntry => "limit_entry",
+            Self::StopLoss => "stop_loss",
+            Self::TakeProfit => "take_profit",
             Self::PartialTakeProfit => "partial_take_profit",
-            Self::Close            => "close",
+            Self::Close => "close",
         }
     }
 }
@@ -75,12 +71,12 @@ pub enum OrderStatus {
 impl OrderStatus {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Pending         => "pending",
-            Self::Accepted        => "accepted",
-            Self::Rejected        => "rejected",
+            Self::Pending => "pending",
+            Self::Accepted => "accepted",
+            Self::Rejected => "rejected",
             Self::PartiallyFilled => "partially_filled",
-            Self::Filled          => "filled",
-            Self::Cancelled       => "cancelled",
+            Self::Filled => "filled",
+            Self::Cancelled => "cancelled",
         }
     }
 }
@@ -95,27 +91,27 @@ impl fmt::Display for OrderStatus {
 
 #[derive(Debug, Clone)]
 pub struct Order {
-    pub order_id:        OrderId,
-    pub signal_id:       SignalId,
-    pub symbol:          Symbol,
-    pub side:            Side,
-    pub order_type:      OrderType,
-    pub status:          OrderStatus,
+    pub order_id: OrderId,
+    pub signal_id: SignalId,
+    pub symbol: Symbol,
+    pub side: Side,
+    pub order_type: OrderType,
+    pub status: OrderStatus,
     pub requested_price: f64,
-    pub quantity:        f64,
-    pub created_at:      i64,
+    pub quantity: f64,
+    pub created_at: i64,
 }
 
 impl Order {
     pub fn new(
-        order_id:        OrderId,
-        signal_id:       SignalId,
-        symbol:          Symbol,
-        side:            Side,
-        order_type:      OrderType,
+        order_id: OrderId,
+        signal_id: SignalId,
+        symbol: Symbol,
+        side: Side,
+        order_type: OrderType,
         requested_price: f64,
-        quantity:        f64,
-        created_at:      i64,
+        quantity: f64,
+        created_at: i64,
     ) -> Self {
         Self {
             order_id,

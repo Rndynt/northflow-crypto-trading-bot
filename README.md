@@ -62,7 +62,16 @@ timestamp,open,high,low,close,volume
 
 Or alternatively `open_time` instead of `timestamp` (case-insensitive).
 
-Timestamps accepted as Unix seconds or Unix milliseconds — normalised to ms internally.
+### Strict timestamp rules
+
+Timestamps must be **positive integers** (Unix seconds or Unix milliseconds):
+
+- Decimal timestamps (e.g. `1700000000.5`) are **rejected**.
+- `NaN`, `inf`, `-INF` and any non-integer string are **rejected**.
+- Negative timestamps are **rejected**.
+- Zero (`0`) is **rejected**.
+- Values `< 10^12` are treated as Unix seconds and multiplied by 1000 to normalise to milliseconds.
+- Values `>= 10^12` are kept as milliseconds unchanged.
 
 ### Invalid candles are rejected
 
@@ -74,11 +83,20 @@ Every loaded candle is validated:
 
 Invalid candles are rejected and recorded in the data quality report. No silent failures.
 
-### Duplicate timestamps and missing gaps are detected
+### Interval and gap detection
 
 - **Duplicate timestamps**: first occurrence is kept, subsequent duplicates rejected and reported.
-- **Missing 1m gaps**: any gap > 60 seconds between consecutive candles is detected and reported with exact count.
+- **Missing 1m gaps**: delta > 60 000 ms between consecutive candles — detected and reported with exact missing count (warning, not fatal in Phase 2).
+- **Irregular sub-minute intervals**: delta < 60 000 ms between consecutive candles — detected and reported as an **error**. This indicates the source data is not 1m OHLCV.
 - **Non-monotonic input**: detected before sorting and flagged in the quality report.
+
+### Timeframe buckets require exact candle counts
+
+- A 5m bucket requires **exactly 5** one-minute candles — no more, no less.
+- A 15m bucket requires **exactly 15** one-minute candles — no more, no less.
+- Underfilled buckets (incomplete data) are dropped silently.
+- Overfilled buckets (irregular data) are also dropped silently.
+- No candle synthesis, interpolation, or forward-fill is ever performed.
 
 ### Paper and live modes are disabled
 

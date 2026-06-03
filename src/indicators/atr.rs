@@ -9,7 +9,11 @@ pub struct Atr {
 
 impl Atr {
     pub fn new(period: usize) -> Self {
-        Self { period, prev_close: None, values: Vec::new() }
+        Self {
+            period,
+            prev_close: None,
+            values: Vec::new(),
+        }
     }
 
     pub fn next(&mut self, candle: Candle) -> Option<f64> {

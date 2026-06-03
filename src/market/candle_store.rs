@@ -7,8 +7,8 @@ use crate::core::{Candle, NorthflowError, Timeframe};
 use crate::market::timeframe_builder::TimeframeBuilder;
 
 pub struct CandleStore {
-    pub one_minute:     Vec<Candle>,
-    pub five_minute:    Vec<Candle>,
+    pub one_minute: Vec<Candle>,
+    pub five_minute: Vec<Candle>,
     pub fifteen_minute: Vec<Candle>,
 }
 
@@ -19,9 +19,13 @@ impl CandleStore {
     /// Incomplete higher-timeframe buckets are silently dropped (see
     /// TimeframeBuilder for the exact rule).
     pub fn build_from_1m(candles_1m: Vec<Candle>) -> Result<Self, NorthflowError> {
-        let five_minute    = TimeframeBuilder::build(&candles_1m, Timeframe::FiveMinute)?;
+        let five_minute = TimeframeBuilder::build(&candles_1m, Timeframe::FiveMinute)?;
         let fifteen_minute = TimeframeBuilder::build(&candles_1m, Timeframe::FifteenMinute)?;
-        Ok(Self { one_minute: candles_1m, five_minute, fifteen_minute })
+        Ok(Self {
+            one_minute: candles_1m,
+            five_minute,
+            fifteen_minute,
+        })
     }
 
     /// Return a slice of candles for the given timeframe.
@@ -29,10 +33,10 @@ impl CandleStore {
     /// Returns `None` for `Timeframe::OneHour` (not stored in Phase 2).
     pub fn get(&self, tf: Timeframe) -> Option<&[Candle]> {
         match tf {
-            Timeframe::OneMinute     => Some(&self.one_minute),
-            Timeframe::FiveMinute    => Some(&self.five_minute),
+            Timeframe::OneMinute => Some(&self.one_minute),
+            Timeframe::FiveMinute => Some(&self.five_minute),
             Timeframe::FifteenMinute => Some(&self.fifteen_minute),
-            Timeframe::OneHour       => None,
+            Timeframe::OneHour => None,
         }
     }
 
@@ -52,7 +56,14 @@ mod tests {
     use super::*;
 
     fn make_candle(ts_ms: i64) -> Candle {
-        Candle { timestamp: ts_ms, open: 100.0, high: 110.0, low: 90.0, close: 105.0, volume: 10.0 }
+        Candle {
+            timestamp: ts_ms,
+            open: 100.0,
+            high: 110.0,
+            low: 90.0,
+            close: 105.0,
+            volume: 10.0,
+        }
     }
 
     /// 15 consecutive 1m candles → exactly 3 × 5m + 1 × 15m.

@@ -46,13 +46,13 @@ pub enum TradeExitReason {
 impl TradeExitReason {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::StopLoss           => "stop_loss",
-            Self::TakeProfit         => "take_profit",
-            Self::PartialTakeProfit  => "partial_take_profit",
-            Self::TimeExit           => "time_exit",
-            Self::ManualClose        => "manual_close",
-            Self::RiskClose          => "risk_close",
-            Self::EndOfBacktest      => "end_of_backtest",
+            Self::StopLoss => "stop_loss",
+            Self::TakeProfit => "take_profit",
+            Self::PartialTakeProfit => "partial_take_profit",
+            Self::TimeExit => "time_exit",
+            Self::ManualClose => "manual_close",
+            Self::RiskClose => "risk_close",
+            Self::EndOfBacktest => "end_of_backtest",
         }
     }
 }
@@ -67,31 +67,31 @@ impl fmt::Display for TradeExitReason {
 
 #[derive(Debug, Clone)]
 pub struct Trade {
-    pub trade_id:          TradeId,
-    pub signal_id:         SignalId,
-    pub position_id:       PositionId,
-    pub symbol:            Symbol,
-    pub strategy_id:       StrategyId,
-    pub side:              Side,
-    pub entry_time:        i64,
-    pub exit_time:         i64,
-    pub entry_price:       f64,
-    pub exit_price:        f64,
-    pub stop_loss:         f64,
-    pub take_profit:       f64,
-    pub quantity:          f64,
-    pub gross_pnl:         f64,
-    pub fee:               f64,
-    pub slippage:          f64,
-    pub net_pnl:           f64,
-    pub reward_risk:       f64,
-    pub bars_held:         u32,
-    pub exit_reason:       TradeExitReason,
-    pub entry_reason:      String,
-    pub filters_passed:    Vec<String>,
-    pub filters_failed:    Vec<String>,
+    pub trade_id: TradeId,
+    pub signal_id: SignalId,
+    pub position_id: PositionId,
+    pub symbol: Symbol,
+    pub strategy_id: StrategyId,
+    pub side: Side,
+    pub entry_time: i64,
+    pub exit_time: i64,
+    pub entry_price: f64,
+    pub exit_price: f64,
+    pub stop_loss: f64,
+    pub take_profit: f64,
+    pub quantity: f64,
+    pub gross_pnl: f64,
+    pub fee: f64,
+    pub slippage: f64,
+    pub net_pnl: f64,
+    pub reward_risk: f64,
+    pub bars_held: u32,
+    pub exit_reason: TradeExitReason,
+    pub entry_reason: String,
+    pub filters_passed: Vec<String>,
+    pub filters_failed: Vec<String>,
     pub expected_edge_bps: f64,
-    pub actual_edge_bps:   f64,
+    pub actual_edge_bps: f64,
 }
 
 impl Trade {
@@ -124,31 +124,31 @@ mod tests {
 
     fn make_trade(net_pnl: f64, gross_pnl: f64, fee: f64, slippage: f64) -> Trade {
         Trade {
-            trade_id:          TradeId::new("TRD-SIG-BT-00000001"),
-            signal_id:         SignalId::new("SIG-BT-00000001"),
-            position_id:       PositionId::new("POS-00000001"),
-            symbol:            Symbol::new("BTCUSDT").unwrap(),
-            strategy_id:       StrategyId::new("screened_vwap_scalp"),
-            side:              Side::Long,
-            entry_time:        1_700_000_000,
-            exit_time:         1_700_000_600,
-            entry_price:       30_000.0,
-            exit_price:        30_600.0,
-            stop_loss:         29_700.0,
-            take_profit:       30_600.0,
-            quantity:          0.1,
+            trade_id: TradeId::new("TRD-SIG-BT-00000001"),
+            signal_id: SignalId::new("SIG-BT-00000001"),
+            position_id: PositionId::new("POS-00000001"),
+            symbol: Symbol::new("BTCUSDT").unwrap(),
+            strategy_id: StrategyId::new("screened_vwap_scalp"),
+            side: Side::Long,
+            entry_time: 1_700_000_000,
+            exit_time: 1_700_000_600,
+            entry_price: 30_000.0,
+            exit_price: 30_600.0,
+            stop_loss: 29_700.0,
+            take_profit: 30_600.0,
+            quantity: 0.1,
             gross_pnl,
             fee,
             slippage,
             net_pnl,
-            reward_risk:       2.0,
-            bars_held:         10,
-            exit_reason:       TradeExitReason::TakeProfit,
-            entry_reason:      "ema_cross_above_vwap".to_string(),
-            filters_passed:    vec!["vwap_filter".to_string()],
-            filters_failed:    vec![],
+            reward_risk: 2.0,
+            bars_held: 10,
+            exit_reason: TradeExitReason::TakeProfit,
+            entry_reason: "ema_cross_above_vwap".to_string(),
+            filters_passed: vec!["vwap_filter".to_string()],
+            filters_failed: vec![],
             expected_edge_bps: 192.0,
-            actual_edge_bps:   195.0,
+            actual_edge_bps: 195.0,
         }
     }
 
@@ -187,16 +187,16 @@ mod tests {
     #[test]
     fn signal_id_traceability() {
         let t = make_trade(55.0, 60.0, 3.0, 2.0);
-        assert_eq!(t.signal_id.as_str(),   "SIG-BT-00000001");
+        assert_eq!(t.signal_id.as_str(), "SIG-BT-00000001");
         assert_eq!(t.position_id.as_str(), "POS-00000001");
-        assert_eq!(t.trade_id.as_str(),    "TRD-SIG-BT-00000001");
+        assert_eq!(t.trade_id.as_str(), "TRD-SIG-BT-00000001");
     }
 
     #[test]
     fn exit_reason_str() {
-        assert_eq!(TradeExitReason::StopLoss.as_str(),      "stop_loss");
-        assert_eq!(TradeExitReason::TakeProfit.as_str(),    "take_profit");
+        assert_eq!(TradeExitReason::StopLoss.as_str(), "stop_loss");
+        assert_eq!(TradeExitReason::TakeProfit.as_str(), "take_profit");
         assert_eq!(TradeExitReason::EndOfBacktest.as_str(), "end_of_backtest");
-        assert_eq!(TradeExitReason::RiskClose.as_str(),     "risk_close");
+        assert_eq!(TradeExitReason::RiskClose.as_str(), "risk_close");
     }
 }

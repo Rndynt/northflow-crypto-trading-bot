@@ -1,6 +1,6 @@
 //! Northflow CLI entry point.
 //!
-//! research  — Phase 1: prints core domain status; backtest in Phase 6.
+//! research  — Phase 2: market data loader and timeframe builder are ready.
 //! paper     — DISABLED until research engine validated.
 //! live      — DISABLED until paper/live parity proven.
 
@@ -19,17 +19,13 @@ fn real_main() -> Result<(), String> {
     let command = args.get(1).map(String::as_str).unwrap_or("help");
     match command {
         "research" => {
-            let config_path = read_config_arg(&args)
-                .unwrap_or_else(|| "config/research.toml".to_string());
+            let config_path =
+                read_config_arg(&args).unwrap_or_else(|| "config/research.toml".to_string());
             let cfg = ResearchConfig::load(&config_path)?;
             run_research(&cfg)
         }
-        "paper" => Err(
-            "paper mode is disabled — research engine not yet validated".to_string(),
-        ),
-        "live" => Err(
-            "live mode is disabled — paper/live parity not yet proven".to_string(),
-        ),
+        "paper" => Err("paper mode is disabled — research engine not yet validated".to_string()),
+        "live" => Err("live mode is disabled — paper/live parity not yet proven".to_string()),
         _ => {
             print_help();
             Ok(())
@@ -51,7 +47,8 @@ fn print_help() {
     println!("  northflow paper   # disabled — research engine not yet validated");
     println!("  northflow live    # disabled — paper/live parity not yet proven");
     println!();
-    println!("Phase 1: core domain types are ready.");
-    println!("         Place CSV data in data/historical/<SYMBOL>.csv");
+    println!("Phase 2: market data loader and timeframe builder are ready.");
+    println!("         Place 1m CSV data in data/historical/<SYMBOL>.csv");
     println!("         Columns: timestamp,open,high,low,close,volume");
+    println!("         Alternative timestamp column: open_time");
 }

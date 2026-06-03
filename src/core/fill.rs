@@ -3,12 +3,7 @@
 
 use std::fmt;
 
-use crate::core::{
-    order::OrderId,
-    side::Side,
-    signal::SignalId,
-    symbol::Symbol,
-};
+use crate::core::{order::OrderId, side::Side, signal::SignalId, symbol::Symbol};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FillId(pub String);
@@ -30,13 +25,13 @@ impl fmt::Display for FillId {
 
 #[derive(Debug, Clone)]
 pub struct Fill {
-    pub fill_id:   FillId,
-    pub order_id:  OrderId,
+    pub fill_id: FillId,
+    pub order_id: OrderId,
     pub signal_id: SignalId,
-    pub symbol:    Symbol,
-    pub side:      Side,
-    pub price:     f64,
-    pub quantity:  f64,
-    pub fee:       f64,
+    pub symbol: Symbol,
+    pub side: Side,
+    pub price: f64,
+    pub quantity: f64,
+    pub fee: f64,
     pub timestamp: i64,
 }

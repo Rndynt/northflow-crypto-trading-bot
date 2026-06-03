@@ -1,4 +1,5 @@
 - [Phase 1 Core Domain](phase1-core-domain.md) — Phase 1 complete: all core types in src/core/, 61 tests pass, CLI prints status.
-- [Phase 2 Market Data design](phase2-market.md) — OhlcvLoader returns OhlcvLoadResult (never panics); all CSV errors in DataQualityReport; MissingCandleGap is warning not error.
-- [Timeframe builder bucket rule](timeframe-builder-rule.md) — builds 5m/15m directly from 1m only; incomplete buckets dropped silently; BTreeMap gives deterministic sorted iteration.
-- [Timestamp normalisation threshold](timestamp-norm.md) — values < 10^12 treated as Unix seconds and multiplied by 1000; values ≥ 10^12 kept as milliseconds.
+- [Phase 2 Market Data design](phase2-market.md) — OhlcvLoader returns OhlcvLoadResult (never panics); all CSV errors in DataQualityReport; MissingCandleGap is warning not error; IrregularInterval (delta < 60_000 ms) is an error.
+- [Timeframe builder bucket rule](timeframe-builder-rule.md) — builds 5m/15m directly from 1m only; bucket must have EXACTLY required count (!=, not <); overfilled AND underfilled buckets dropped silently; BTreeMap gives deterministic sorted iteration.
+- [Timestamp normalisation threshold](timestamp-norm.md) — strict i64 only (no f64 fallback); decimal/NaN/inf/negative/zero all rejected; values < 10^12 → seconds × 1000; values ≥ 10^12 kept as milliseconds.
+- [src/data deprecation](data-deprecation.md) — src/data/mod.rs kept on disk but removed from pub mod in lib.rs; active loader is crate::market::OhlcvLoader only.

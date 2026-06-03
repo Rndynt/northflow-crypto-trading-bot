@@ -24,13 +24,21 @@ pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
     println!();
 
     // Validate explicit timeframe roles
-    cfg.validate_timeframes()
-        .map_err(|e| format!("{e}"))?;
+    cfg.validate_timeframes().map_err(|e| format!("{e}"))?;
 
     println!("  Timeframe model:");
-    println!("    entry_timeframe        = \"{}\"  (1m  → entry & execution)", cfg.entry_timeframe);
-    println!("    screening_timeframe    = \"{}\" (15m → regime bias)", cfg.screening_timeframe);
-    println!("    confirmation_timeframe = \"{}\"  (5m  → confirmation)", cfg.confirmation_timeframe);
+    println!(
+        "    entry_timeframe        = \"{}\"  (1m  → entry & execution)",
+        cfg.entry_timeframe
+    );
+    println!(
+        "    screening_timeframe    = \"{}\" (15m → regime bias)",
+        cfg.screening_timeframe
+    );
+    println!(
+        "    confirmation_timeframe = \"{}\"  (5m  → confirmation)",
+        cfg.confirmation_timeframe
+    );
     println!();
     println!("  paper mode  DISABLED — research engine not yet validated");
     println!("  live mode   DISABLED — research engine not yet validated");
@@ -56,25 +64,39 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
     }
 
     let load_result = match OhlcvLoader::load_file(&csv_path) {
-        Ok(r)  => r,
-        Err(e) => { println!("Error loading {symbol}: {e}"); return; }
+        Ok(r) => r,
+        Err(e) => {
+            println!("Error loading {symbol}: {e}");
+            return;
+        }
     };
 
     let quality = &load_result.quality;
-    let store   = match CandleStore::build_from_1m(load_result.candles) {
-        Ok(s)  => s,
-        Err(e) => { println!("Error building candle store for {symbol}: {e}"); return; }
+    let store = match CandleStore::build_from_1m(load_result.candles) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("Error building candle store for {symbol}: {e}");
+            return;
+        }
     };
 
-    let dup_count = quality.issues.iter()
+    let dup_count = quality
+        .issues
+        .iter()
         .filter(|i| i.kind == DataQualityIssueKind::DuplicateTimestamp)
         .count();
 
     println!("Symbol:                {symbol}");
     println!("Source:                {}", csv_path.display());
     println!("1m candles:            {}", store.len(Timeframe::OneMinute));
-    println!("5m candles:            {}", store.len(Timeframe::FiveMinute));
-    println!("15m candles:           {}", store.len(Timeframe::FifteenMinute));
+    println!(
+        "5m candles:            {}",
+        store.len(Timeframe::FiveMinute)
+    );
+    println!(
+        "15m candles:           {}",
+        store.len(Timeframe::FifteenMinute)
+    );
     println!("Data quality issues:   {}", quality.error_count());
     println!("Duplicate timestamps:  {dup_count}");
     println!("Missing gaps:          {}", quality.missing_gaps.len());
@@ -85,7 +107,7 @@ fn run_symbol(cfg: &ResearchConfig, symbol: &str) {
         for issue in quality.issues.iter().filter(|i| i.kind.is_error()) {
             match issue.row {
                 Some(row) => println!("    [{}] row {row}: {}", issue.kind, issue.message),
-                None      => println!("    [{}] {}", issue.kind, issue.message),
+                None => println!("    [{}] {}", issue.kind, issue.message),
             }
         }
     }

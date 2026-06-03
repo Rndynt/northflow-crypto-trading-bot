@@ -9,12 +9,7 @@
 
 use std::fmt;
 
-use crate::core::{
-    error::NorthflowError,
-    side::Side,
-    symbol::Symbol,
-    timeframe::Timeframe,
-};
+use crate::core::{error::NorthflowError, side::Side, symbol::Symbol, timeframe::Timeframe};
 
 // ── Signal identity types ────────────────────────────────────────────────────
 
@@ -61,30 +56,30 @@ impl fmt::Display for StrategyId {
 /// this `signal_id`.
 #[derive(Debug, Clone)]
 pub struct Signal {
-    pub signal_id:               SignalId,
-    pub symbol:                  Symbol,
-    pub strategy_id:             StrategyId,
-    pub side:                    Side,
+    pub signal_id: SignalId,
+    pub symbol: Symbol,
+    pub strategy_id: StrategyId,
+    pub side: Side,
     /// 1m — entry and execution.
-    pub entry_timeframe:         Timeframe,
+    pub entry_timeframe: Timeframe,
     /// 15m — screening and regime bias.
-    pub screening_timeframe:     Timeframe,
+    pub screening_timeframe: Timeframe,
     /// 5m — confirmation.
-    pub confirmation_timeframe:  Timeframe,
-    pub entry_time:              i64,
-    pub entry_price:             f64,
-    pub stop_loss:               f64,
-    pub take_profit:             f64,
+    pub confirmation_timeframe: Timeframe,
+    pub entry_time: i64,
+    pub entry_price: f64,
+    pub stop_loss: f64,
+    pub take_profit: f64,
     /// Strategy confidence 0–100.
-    pub confidence:              u8,
+    pub confidence: u8,
     /// Market regime label (e.g. "bullish", "bearish", "ranging").
-    pub regime:                  String,
-    pub entry_reason:            String,
-    pub filters_passed:          Vec<String>,
-    pub filters_failed:          Vec<String>,
-    pub expected_reward_bps:     f64,
-    pub estimated_cost_bps:      f64,
-    pub expected_net_edge_bps:   f64,
+    pub regime: String,
+    pub entry_reason: String,
+    pub filters_passed: Vec<String>,
+    pub filters_failed: Vec<String>,
+    pub expected_reward_bps: f64,
+    pub estimated_cost_bps: f64,
+    pub expected_net_edge_bps: f64,
 }
 
 impl Signal {
@@ -105,7 +100,7 @@ impl Signal {
             return false;
         }
         match self.side {
-            Side::Long  => self.stop_loss  < self.entry_price && self.entry_price < self.take_profit,
+            Side::Long => self.stop_loss < self.entry_price && self.entry_price < self.take_profit,
             Side::Short => self.take_profit < self.entry_price && self.entry_price < self.stop_loss,
         }
     }
@@ -135,49 +130,49 @@ mod tests {
 
     fn make_long() -> Signal {
         Signal {
-            signal_id:              SignalId::new("SIG-BT-00000001"),
-            symbol:                 Symbol::new("BTCUSDT").unwrap(),
-            strategy_id:            StrategyId::new("screened_vwap_scalp"),
-            side:                   Side::Long,
-            entry_timeframe:        Timeframe::OneMinute,
-            screening_timeframe:    Timeframe::FifteenMinute,
+            signal_id: SignalId::new("SIG-BT-00000001"),
+            symbol: Symbol::new("BTCUSDT").unwrap(),
+            strategy_id: StrategyId::new("screened_vwap_scalp"),
+            side: Side::Long,
+            entry_timeframe: Timeframe::OneMinute,
+            screening_timeframe: Timeframe::FifteenMinute,
             confirmation_timeframe: Timeframe::FiveMinute,
-            entry_time:             1_700_000_000,
-            entry_price:            30_000.0,
-            stop_loss:              29_700.0,
-            take_profit:            30_600.0,
-            confidence:             70,
-            regime:                 "bullish".to_string(),
-            entry_reason:           "ema_cross_above_vwap".to_string(),
-            filters_passed:         vec!["vwap_filter".to_string()],
-            filters_failed:         vec![],
-            expected_reward_bps:    200.0,
-            estimated_cost_bps:     8.0,
-            expected_net_edge_bps:  192.0,
+            entry_time: 1_700_000_000,
+            entry_price: 30_000.0,
+            stop_loss: 29_700.0,
+            take_profit: 30_600.0,
+            confidence: 70,
+            regime: "bullish".to_string(),
+            entry_reason: "ema_cross_above_vwap".to_string(),
+            filters_passed: vec!["vwap_filter".to_string()],
+            filters_failed: vec![],
+            expected_reward_bps: 200.0,
+            estimated_cost_bps: 8.0,
+            expected_net_edge_bps: 192.0,
         }
     }
 
     fn make_short() -> Signal {
         Signal {
-            signal_id:              SignalId::new("SIG-BT-00000002"),
-            symbol:                 Symbol::new("BTCUSDT").unwrap(),
-            strategy_id:            StrategyId::new("screened_vwap_scalp"),
-            side:                   Side::Short,
-            entry_timeframe:        Timeframe::OneMinute,
-            screening_timeframe:    Timeframe::FifteenMinute,
+            signal_id: SignalId::new("SIG-BT-00000002"),
+            symbol: Symbol::new("BTCUSDT").unwrap(),
+            strategy_id: StrategyId::new("screened_vwap_scalp"),
+            side: Side::Short,
+            entry_timeframe: Timeframe::OneMinute,
+            screening_timeframe: Timeframe::FifteenMinute,
             confirmation_timeframe: Timeframe::FiveMinute,
-            entry_time:             1_700_000_060,
-            entry_price:            30_000.0,
-            stop_loss:              30_300.0,
-            take_profit:            29_400.0,
-            confidence:             65,
-            regime:                 "bearish".to_string(),
-            entry_reason:           "ema_cross_below_vwap".to_string(),
-            filters_passed:         vec!["vwap_filter".to_string()],
-            filters_failed:         vec![],
-            expected_reward_bps:    200.0,
-            estimated_cost_bps:     8.0,
-            expected_net_edge_bps:  192.0,
+            entry_time: 1_700_000_060,
+            entry_price: 30_000.0,
+            stop_loss: 30_300.0,
+            take_profit: 29_400.0,
+            confidence: 65,
+            regime: "bearish".to_string(),
+            entry_reason: "ema_cross_below_vwap".to_string(),
+            filters_passed: vec!["vwap_filter".to_string()],
+            filters_failed: vec![],
+            expected_reward_bps: 200.0,
+            estimated_cost_bps: 8.0,
+            expected_net_edge_bps: 192.0,
         }
     }
 
@@ -267,9 +262,17 @@ mod tests {
     #[test]
     fn explicit_timeframe_roles() {
         let s = make_long();
-        assert_eq!(s.entry_timeframe,        Timeframe::OneMinute,     "entry must be 1m");
-        assert_eq!(s.screening_timeframe,    Timeframe::FifteenMinute, "screening must be 15m");
-        assert_eq!(s.confirmation_timeframe, Timeframe::FiveMinute,    "confirmation must be 5m");
+        assert_eq!(s.entry_timeframe, Timeframe::OneMinute, "entry must be 1m");
+        assert_eq!(
+            s.screening_timeframe,
+            Timeframe::FifteenMinute,
+            "screening must be 15m"
+        );
+        assert_eq!(
+            s.confirmation_timeframe,
+            Timeframe::FiveMinute,
+            "confirmation must be 5m"
+        );
     }
 
     #[test]

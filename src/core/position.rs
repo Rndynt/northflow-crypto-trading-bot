@@ -3,11 +3,7 @@
 use std::fmt;
 
 use crate::core::{
-    error::NorthflowError,
-    order::OrderId,
-    side::Side,
-    signal::SignalId,
-    symbol::Symbol,
+    error::NorthflowError, order::OrderId, side::Side, signal::SignalId, symbol::Symbol,
 };
 
 // ── PositionId ───────────────────────────────────────────────────────────────
@@ -43,24 +39,24 @@ pub enum PositionStatus {
 
 #[derive(Debug, Clone)]
 pub struct Position {
-    pub position_id:    PositionId,
-    pub signal_id:      SignalId,
+    pub position_id: PositionId,
+    pub signal_id: SignalId,
     pub entry_order_id: OrderId,
-    pub symbol:         Symbol,
-    pub side:           Side,
-    pub entry_price:    f64,
-    pub quantity:       f64,
-    pub stop_loss:      f64,
-    pub take_profit:    f64,
-    pub opened_at:      i64,
-    pub status:         PositionStatus,
+    pub symbol: Symbol,
+    pub side: Side,
+    pub entry_price: f64,
+    pub quantity: f64,
+    pub stop_loss: f64,
+    pub take_profit: f64,
+    pub opened_at: i64,
+    pub status: PositionStatus,
 }
 
 impl Position {
     /// Unrealized PnL at `current_price`, ignoring fees.
     pub fn unrealized_pnl(&self, current_price: f64) -> f64 {
         let diff = match self.side {
-            Side::Long  => current_price - self.entry_price,
+            Side::Long => current_price - self.entry_price,
             Side::Short => self.entry_price - current_price,
         };
         diff * self.quantity
@@ -74,7 +70,7 @@ impl Position {
             )));
         }
         let geometry_ok = match self.side {
-            Side::Long  => self.stop_loss  < self.entry_price && self.entry_price < self.take_profit,
+            Side::Long => self.stop_loss < self.entry_price && self.entry_price < self.take_profit,
             Side::Short => self.take_profit < self.entry_price && self.entry_price < self.stop_loss,
         };
         if !geometry_ok {
@@ -96,33 +92,33 @@ mod tests {
 
     fn long_pos() -> Position {
         Position {
-            position_id:    PositionId::new("POS-00000001"),
-            signal_id:      SignalId::new("SIG-BT-00000001"),
+            position_id: PositionId::new("POS-00000001"),
+            signal_id: SignalId::new("SIG-BT-00000001"),
             entry_order_id: OrderId::new("ORD-SIG-BT-00000001-ENTRY"),
-            symbol:         Symbol::new("BTCUSDT").unwrap(),
-            side:           Side::Long,
-            entry_price:    30_000.0,
-            quantity:       0.1,
-            stop_loss:      29_700.0,
-            take_profit:    30_600.0,
-            opened_at:      1_700_000_000,
-            status:         PositionStatus::Open,
+            symbol: Symbol::new("BTCUSDT").unwrap(),
+            side: Side::Long,
+            entry_price: 30_000.0,
+            quantity: 0.1,
+            stop_loss: 29_700.0,
+            take_profit: 30_600.0,
+            opened_at: 1_700_000_000,
+            status: PositionStatus::Open,
         }
     }
 
     fn short_pos() -> Position {
         Position {
-            position_id:    PositionId::new("POS-00000002"),
-            signal_id:      SignalId::new("SIG-BT-00000002"),
+            position_id: PositionId::new("POS-00000002"),
+            signal_id: SignalId::new("SIG-BT-00000002"),
             entry_order_id: OrderId::new("ORD-SIG-BT-00000002-ENTRY"),
-            symbol:         Symbol::new("BTCUSDT").unwrap(),
-            side:           Side::Short,
-            entry_price:    30_000.0,
-            quantity:       0.1,
-            stop_loss:      30_300.0,
-            take_profit:    29_400.0,
-            opened_at:      1_700_000_060,
-            status:         PositionStatus::Open,
+            symbol: Symbol::new("BTCUSDT").unwrap(),
+            side: Side::Short,
+            entry_price: 30_000.0,
+            quantity: 0.1,
+            stop_loss: 30_300.0,
+            take_profit: 29_400.0,
+            opened_at: 1_700_000_060,
+            status: PositionStatus::Open,
         }
     }
 

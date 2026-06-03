@@ -3,18 +3,19 @@
 //! Rules:
 //!   - No async, no network, no exchange API calls.
 //!   - Accepts headers: timestamp or open_time (case-insensitive, whitespace-tolerant).
+//!   - Timestamps must be positive integers (Unix seconds or milliseconds).
+//!     Decimal, NaN, inf, negative, and zero timestamps are rejected.
 //!   - Normalises timestamps to milliseconds: < 10^12 → seconds × 1000.
 //!   - Reports every rejected row in DataQualityReport; never panics on bad data.
 //!   - Sorts output candles ascending by timestamp.
 //!   - Detects non-monotonic input, duplicate timestamps (keep first),
-//!     and missing 1m gaps (60_000 ms expected interval).
+//!     missing 1m gaps (delta > 60_000 ms — warning), and
+//!     irregular sub-minute intervals (delta < 60_000 ms — error).
 
 use std::path::Path;
 
 use crate::core::{Candle, NorthflowError};
-use crate::market::data_quality::{
-    DataQualityIssueKind, DataQualityReport, MissingCandleGap,
-};
+use crate::market::data_quality::{DataQualityIssueKind, DataQualityReport, MissingCandleGap};
 
 /// Timestamps below this value are treated as Unix seconds and multiplied
 /// by 1_000 to convert to milliseconds.  (~year 2001 in ms = 10^12)
@@ -32,6 +33,30 @@ pub struct OhlcvLoadResult {
 
 pub struct OhlcvLoader;
 
+/// Parse a raw timestamp string into a millisecond Unix timestamp.
+///
+/// Rules:
+///   - Must be a valid integer (no decimals, no NaN, no inf).
+///   - Must be strictly positive (> 0).
+///   - Values < SECONDS_THRESHOLD are treated as Unix seconds and multiplied by 1_000.
+///   - Values >= SECONDS_THRESHOLD are kept as milliseconds.
+fn parse_timestamp_ms(raw: &str) -> Result<i64, String> {
+    let ts = raw
+        .trim()
+        .parse::<i64>()
+        .map_err(|_| format!("timestamp must be a positive integer, got '{raw}'"))?;
+
+    if ts <= 0 {
+        return Err(format!("timestamp must be > 0, got {ts}"));
+    }
+
+    if ts < SECONDS_THRESHOLD {
+        Ok(ts * 1_000)
+    } else {
+        Ok(ts)
+    }
+}
+
 impl OhlcvLoader {
     /// Load a 1m OHLCV CSV file from disk.
     ///
@@ -40,9 +65,8 @@ impl OhlcvLoader {
     /// returned `OhlcvLoadResult.quality` report.
     pub fn load_file(path: &Path) -> Result<OhlcvLoadResult, NorthflowError> {
         let source = path.display().to_string();
-        let raw = std::fs::read_to_string(path).map_err(|e| {
-            NorthflowError::DataError(format!("failed to read '{source}': {e}"))
-        })?;
+        let raw = std::fs::read_to_string(path)
+            .map_err(|e| NorthflowError::DataError(format!("failed to read '{source}': {e}")))?;
         Ok(Self::load_csv(&source, &raw))
     }
 
@@ -51,7 +75,7 @@ impl OhlcvLoader {
     /// This function never panics — all errors are recorded in the report.
     pub fn load_csv(source: &str, raw: &str) -> OhlcvLoadResult {
         let mut quality = DataQualityReport::new(source);
-        let mut lines   = raw.lines().enumerate();
+        let mut lines = raw.lines().enumerate();
 
         // ── locate header ────────────────────────────────────────────────────
         let header_line = loop {
@@ -59,10 +83,14 @@ impl OhlcvLoader {
                 None => {
                     quality.push_issue(
                         DataQualityIssueKind::EmptyFile,
-                        None, None,
+                        None,
+                        None,
                         "file is empty",
                     );
-                    return OhlcvLoadResult { candles: Vec::new(), quality };
+                    return OhlcvLoadResult {
+                        candles: Vec::new(),
+                        quality,
+                    };
                 }
                 Some((_, line)) if line.trim().is_empty() => continue,
                 Some((_, line)) => break line,
@@ -79,33 +107,53 @@ impl OhlcvLoader {
             cols.iter().position(|c| names.contains(&c.as_str()))
         };
 
-        let ts_i    = find(&["timestamp", "open_time"]);
-        let open_i  = find(&["open"]);
-        let high_i  = find(&["high"]);
-        let low_i   = find(&["low"]);
+        let ts_i = find(&["timestamp", "open_time"]);
+        let open_i = find(&["open"]);
+        let high_i = find(&["high"]);
+        let low_i = find(&["low"]);
         let close_i = find(&["close"]);
-        let vol_i   = find(&["volume"]);
+        let vol_i = find(&["volume"]);
 
         let mut missing: Vec<&str> = Vec::new();
-        if ts_i.is_none()    { missing.push("timestamp/open_time"); }
-        if open_i.is_none()  { missing.push("open"); }
-        if high_i.is_none()  { missing.push("high"); }
-        if low_i.is_none()   { missing.push("low"); }
-        if close_i.is_none() { missing.push("close"); }
-        if vol_i.is_none()   { missing.push("volume"); }
+        if ts_i.is_none() {
+            missing.push("timestamp/open_time");
+        }
+        if open_i.is_none() {
+            missing.push("open");
+        }
+        if high_i.is_none() {
+            missing.push("high");
+        }
+        if low_i.is_none() {
+            missing.push("low");
+        }
+        if close_i.is_none() {
+            missing.push("close");
+        }
+        if vol_i.is_none() {
+            missing.push("volume");
+        }
 
         if !missing.is_empty() {
             quality.push_issue(
                 DataQualityIssueKind::MissingRequiredColumn,
-                None, None,
+                None,
+                None,
                 format!("missing required columns: {}", missing.join(", ")),
             );
-            return OhlcvLoadResult { candles: Vec::new(), quality };
+            return OhlcvLoadResult {
+                candles: Vec::new(),
+                quality,
+            };
         }
 
         let (ts_i, open_i, high_i, low_i, close_i, vol_i) = (
-            ts_i.unwrap(), open_i.unwrap(), high_i.unwrap(),
-            low_i.unwrap(), close_i.unwrap(), vol_i.unwrap(),
+            ts_i.unwrap(),
+            open_i.unwrap(),
+            high_i.unwrap(),
+            low_i.unwrap(),
+            close_i.unwrap(),
+            vol_i.unwrap(),
         );
         let min_fields = [ts_i, open_i, high_i, low_i, close_i, vol_i]
             .iter()
@@ -119,7 +167,9 @@ impl OhlcvLoader {
 
         for (line_no, line) in lines {
             let line = line.trim();
-            if line.is_empty() { continue; }
+            if line.is_empty() {
+                continue;
+            }
             quality.total_rows += 1;
 
             let fields: Vec<&str> = line.split(',').collect();
@@ -127,7 +177,8 @@ impl OhlcvLoader {
             if fields.len() < min_fields {
                 quality.push_issue(
                     DataQualityIssueKind::MalformedRow,
-                    Some(line_no + 1), None,
+                    Some(line_no + 1),
+                    None,
                     format!(
                         "expected ≥{min_fields} fields, got {} in row '{line}'",
                         fields.len()
@@ -137,24 +188,21 @@ impl OhlcvLoader {
                 continue;
             }
 
-            // Parse timestamp
+            // Parse timestamp — strictly as positive integer only.
             let ts_str = fields[ts_i].trim();
-            let ts_raw = match ts_str
-                .parse::<i64>()
-                .or_else(|_| ts_str.parse::<f64>().map(|f| f as i64))
-            {
+            let ts_ms = match parse_timestamp_ms(ts_str) {
                 Ok(v) => v,
-                Err(_) => {
+                Err(msg) => {
                     quality.push_issue(
                         DataQualityIssueKind::InvalidTimestamp,
-                        Some(line_no + 1), None,
-                        format!("cannot parse timestamp '{ts_str}'"),
+                        Some(line_no + 1),
+                        None,
+                        format!("cannot parse timestamp '{ts_str}': {msg}"),
                     );
                     quality.rejected_rows += 1;
                     continue;
                 }
             };
-            let ts_ms = if ts_raw < SECONDS_THRESHOLD { ts_raw * 1_000 } else { ts_raw };
 
             // Parse OHLCV — macro avoids repeating error-handling boilerplate
             macro_rules! parse_f {
@@ -164,11 +212,9 @@ impl OhlcvLoader {
                         Err(_) => {
                             quality.push_issue(
                                 DataQualityIssueKind::InvalidNumber,
-                                Some(line_no + 1), Some(ts_ms),
-                                format!(
-                                    "cannot parse {} '{}'",
-                                    $label, fields[$idx].trim()
-                                ),
+                                Some(line_no + 1),
+                                Some(ts_ms),
+                                format!("cannot parse {} '{}'", $label, fields[$idx].trim()),
                             );
                             quality.rejected_rows += 1;
                             continue;
@@ -177,18 +223,26 @@ impl OhlcvLoader {
                 }};
             }
 
-            let open   = parse_f!(open_i,  "open");
-            let high   = parse_f!(high_i,  "high");
-            let low    = parse_f!(low_i,   "low");
-            let close  = parse_f!(close_i, "close");
-            let volume = parse_f!(vol_i,   "volume");
+            let open = parse_f!(open_i, "open");
+            let high = parse_f!(high_i, "high");
+            let low = parse_f!(low_i, "low");
+            let close = parse_f!(close_i, "close");
+            let volume = parse_f!(vol_i, "volume");
 
             // Validate candle geometry and value ranges
-            let candle = Candle { timestamp: ts_ms, open, high, low, close, volume };
+            let candle = Candle {
+                timestamp: ts_ms,
+                open,
+                high,
+                low,
+                close,
+                volume,
+            };
             if let Err(e) = candle.validate() {
                 quality.push_issue(
                     DataQualityIssueKind::InvalidCandle,
-                    Some(line_no + 1), Some(ts_ms),
+                    Some(line_no + 1),
+                    Some(ts_ms),
                     e.to_string(),
                 );
                 quality.rejected_rows += 1;
@@ -202,10 +256,14 @@ impl OhlcvLoader {
         if quality.total_rows == 0 {
             quality.push_issue(
                 DataQualityIssueKind::EmptyFile,
-                None, None,
+                None,
+                None,
                 "no data rows found (header only)",
             );
-            return OhlcvLoadResult { candles: Vec::new(), quality };
+            return OhlcvLoadResult {
+                candles: Vec::new(),
+                quality,
+            };
         }
 
         // ── detect non-monotonic input (report before sorting) ───────────────
@@ -215,7 +273,8 @@ impl OhlcvLoader {
         if !already_sorted {
             quality.push_issue(
                 DataQualityIssueKind::NonMonotonicTimestamp,
-                None, None,
+                None,
+                None,
                 "input rows are not ordered by timestamp; sorted automatically",
             );
         }
@@ -230,7 +289,8 @@ impl OhlcvLoader {
                 if last.timestamp == candle.timestamp {
                     quality.push_issue(
                         DataQualityIssueKind::DuplicateTimestamp,
-                        None, Some(candle.timestamp),
+                        None,
+                        Some(candle.timestamp),
                         format!(
                             "duplicate timestamp {}; first occurrence kept",
                             candle.timestamp
@@ -243,34 +303,53 @@ impl OhlcvLoader {
             deduped.push(candle);
         }
 
-        // ── detect missing 1m candle gaps ────────────────────────────────────
+        // ── detect interval issues: missing gaps and irregular intervals ──────
         for i in 1..deduped.len() {
             let prev_ts = deduped[i - 1].timestamp;
             let curr_ts = deduped[i].timestamp;
-            let delta   = curr_ts - prev_ts;
+            let delta = curr_ts - prev_ts;
 
-            if delta > ONE_MINUTE_MS {
-                let missing_count        = (delta / ONE_MINUTE_MS) as u64 - 1;
-                let expected_next        = prev_ts + ONE_MINUTE_MS;
+            if delta == ONE_MINUTE_MS {
+                // Exact 1m interval — correct, nothing to report.
+            } else if delta > ONE_MINUTE_MS {
+                // Gap: one or more 1m candles are absent.
+                let missing_count = (delta / ONE_MINUTE_MS) as u64 - 1;
+                let expected_next = prev_ts + ONE_MINUTE_MS;
 
                 quality.missing_gaps.push(MissingCandleGap {
-                    from_timestamp:          prev_ts,
-                    to_timestamp:            curr_ts,
+                    from_timestamp: prev_ts,
+                    to_timestamp: curr_ts,
                     expected_next_timestamp: expected_next,
                     missing_count,
                 });
                 quality.push_issue(
                     DataQualityIssueKind::MissingCandleGap,
-                    None, Some(expected_next),
+                    None,
+                    Some(expected_next),
                     format!(
                         "missing {missing_count} candle(s) between ts={prev_ts} and ts={curr_ts}"
+                    ),
+                );
+            } else {
+                // delta < ONE_MINUTE_MS (and > 0, since duplicates were removed).
+                // This is a sub-minute interval — data source is not 1m OHLCV.
+                quality.push_issue(
+                    DataQualityIssueKind::IrregularInterval,
+                    None,
+                    Some(curr_ts),
+                    format!(
+                        "irregular 1m interval: prev={prev_ts} current={curr_ts} \
+                         delta={delta} expected={ONE_MINUTE_MS}"
                     ),
                 );
             }
         }
 
         quality.valid_candles = deduped.len();
-        OhlcvLoadResult { candles: deduped, quality }
+        OhlcvLoadResult {
+            candles: deduped,
+            quality,
+        }
     }
 }
 
@@ -278,7 +357,7 @@ impl OhlcvLoader {
 mod tests {
     use super::*;
 
-    const HDR:    &str = "timestamp,open,high,low,close,volume";
+    const HDR: &str = "timestamp,open,high,low,close,volume";
     const HDR_OT: &str = "open_time,open,high,low,close,volume";
 
     fn row_ms(ts: i64) -> String {
@@ -324,6 +403,99 @@ mod tests {
         assert_eq!(r.candles[0].timestamp, ts);
     }
 
+    #[test]
+    fn normalises_positive_seconds_timestamp_to_milliseconds() {
+        let csv = format!("{HDR}\n{}\n", row_s(1_700_000_000));
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert_eq!(r.candles.len(), 1);
+        assert_eq!(r.candles[0].timestamp, 1_700_000_000_000);
+        assert!(!r.quality.has_errors());
+    }
+
+    #[test]
+    fn keeps_positive_milliseconds_timestamp_unchanged() {
+        let ts = 1_700_000_060_000_i64;
+        let csv = format!("{HDR}\n{}\n", row_ms(ts));
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert_eq!(r.candles.len(), 1);
+        assert_eq!(r.candles[0].timestamp, ts);
+        assert!(!r.quality.has_errors());
+    }
+
+    // ── strict timestamp rejection ────────────────────────────────────────────
+
+    #[test]
+    fn rejects_decimal_timestamp() {
+        let csv = format!("{HDR}\n1700000000.5,100.0,110.0,90.0,105.0,10.0\n");
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert!(r.candles.is_empty());
+        assert_eq!(r.quality.rejected_rows, 1);
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::InvalidTimestamp)
+        );
+    }
+
+    #[test]
+    fn rejects_nan_timestamp() {
+        let csv = format!("{HDR}\nNaN,100.0,110.0,90.0,105.0,10.0\n");
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert!(r.candles.is_empty());
+        assert_eq!(r.quality.rejected_rows, 1);
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::InvalidTimestamp)
+        );
+    }
+
+    #[test]
+    fn rejects_infinite_timestamp() {
+        for bad in &["inf", "-INF", "Inf", "infinity"] {
+            let csv = format!("{HDR}\n{bad},100.0,110.0,90.0,105.0,10.0\n");
+            let r = OhlcvLoader::load_csv("test", &csv);
+            assert!(r.candles.is_empty(), "expected empty candles for '{bad}'");
+            assert!(
+                r.quality
+                    .issues
+                    .iter()
+                    .any(|i| i.kind == DataQualityIssueKind::InvalidTimestamp),
+                "expected InvalidTimestamp for '{bad}'"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_negative_timestamp() {
+        let csv = format!("{HDR}\n-1700000000,100.0,110.0,90.0,105.0,10.0\n");
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert!(r.candles.is_empty());
+        assert_eq!(r.quality.rejected_rows, 1);
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::InvalidTimestamp)
+        );
+    }
+
+    #[test]
+    fn rejects_zero_timestamp() {
+        let csv = format!("{HDR}\n0,100.0,110.0,90.0,105.0,10.0\n");
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert!(r.candles.is_empty());
+        assert_eq!(r.quality.rejected_rows, 1);
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::InvalidTimestamp)
+        );
+    }
+
     // ── rejection cases ───────────────────────────────────────────────────────
 
     #[test]
@@ -331,8 +503,12 @@ mod tests {
         let csv = "open,high,low,close,volume\n100.0,110.0,90.0,105.0,10.0\n";
         let r = OhlcvLoader::load_csv("test", csv);
         assert!(r.candles.is_empty());
-        assert!(r.quality.issues.iter()
-            .any(|i| i.kind == DataQualityIssueKind::MissingRequiredColumn));
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::MissingRequiredColumn)
+        );
     }
 
     #[test]
@@ -340,8 +516,12 @@ mod tests {
         let csv = format!("{HDR}\n1700000000000,notanumber,110.0,90.0,105.0,10.0\n");
         let r = OhlcvLoader::load_csv("test", &csv);
         assert!(r.candles.is_empty());
-        assert!(r.quality.issues.iter()
-            .any(|i| i.kind == DataQualityIssueKind::InvalidNumber));
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::InvalidNumber)
+        );
     }
 
     #[test]
@@ -349,8 +529,12 @@ mod tests {
         let csv = format!("{HDR}\nabc,100.0,110.0,90.0,105.0,10.0\n");
         let r = OhlcvLoader::load_csv("test", &csv);
         assert!(r.candles.is_empty());
-        assert!(r.quality.issues.iter()
-            .any(|i| i.kind == DataQualityIssueKind::InvalidTimestamp));
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::InvalidTimestamp)
+        );
     }
 
     #[test]
@@ -359,15 +543,20 @@ mod tests {
         let csv = format!("{HDR}\n1700000000000,100.0,85.0,90.0,100.0,10.0\n");
         let r = OhlcvLoader::load_csv("test", &csv);
         assert!(r.candles.is_empty());
-        assert!(r.quality.issues.iter()
-            .any(|i| i.kind == DataQualityIssueKind::InvalidCandle));
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::InvalidCandle)
+        );
     }
 
     // ── sorting & dedup ───────────────────────────────────────────────────────
 
     #[test]
     fn sorts_output_candles_ascending() {
-        let csv = format!("{HDR}\n{}\n{}\n",
+        let csv = format!(
+            "{HDR}\n{}\n{}\n",
             row_ms(1_700_000_060_000),
             row_ms(1_700_000_000_000),
         );
@@ -378,13 +567,18 @@ mod tests {
 
     #[test]
     fn detects_non_monotonic_input() {
-        let csv = format!("{HDR}\n{}\n{}\n",
+        let csv = format!(
+            "{HDR}\n{}\n{}\n",
             row_ms(1_700_000_060_000),
             row_ms(1_700_000_000_000),
         );
         let r = OhlcvLoader::load_csv("test", &csv);
-        assert!(r.quality.issues.iter()
-            .any(|i| i.kind == DataQualityIssueKind::NonMonotonicTimestamp));
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::NonMonotonicTimestamp)
+        );
     }
 
     #[test]
@@ -393,8 +587,12 @@ mod tests {
         let csv = format!("{HDR}\n{}\n{}\n", row_ms(ts), row_ms(ts));
         let r = OhlcvLoader::load_csv("test", &csv);
         assert_eq!(r.candles.len(), 1);
-        assert!(r.quality.issues.iter()
-            .any(|i| i.kind == DataQualityIssueKind::DuplicateTimestamp));
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::DuplicateTimestamp)
+        );
     }
 
     // ── missing candle gap detection ─────────────────────────────────────────
@@ -416,7 +614,8 @@ mod tests {
     fn detects_one_missing_candle() {
         let base = 1_700_000_000_000_i64;
         // jump 2 minutes → 1 candle missing
-        let csv = format!("{HDR}\n{}\n{}\n",
+        let csv = format!(
+            "{HDR}\n{}\n{}\n",
             row_ms(base),
             row_ms(base + 2 * ONE_MINUTE_MS),
         );
@@ -429,13 +628,81 @@ mod tests {
     fn detects_multiple_missing_candles() {
         let base = 1_700_000_000_000_i64;
         // jump 5 minutes → 4 candles missing
-        let csv = format!("{HDR}\n{}\n{}\n",
+        let csv = format!(
+            "{HDR}\n{}\n{}\n",
             row_ms(base),
             row_ms(base + 5 * ONE_MINUTE_MS),
         );
         let r = OhlcvLoader::load_csv("test", &csv);
         assert_eq!(r.quality.missing_gaps.len(), 1);
         assert_eq!(r.quality.missing_gaps[0].missing_count, 4);
-        assert_eq!(r.quality.missing_gaps[0].expected_next_timestamp, base + ONE_MINUTE_MS);
+        assert_eq!(
+            r.quality.missing_gaps[0].expected_next_timestamp,
+            base + ONE_MINUTE_MS
+        );
+    }
+
+    // ── irregular interval detection ─────────────────────────────────────────
+
+    #[test]
+    fn detects_irregular_sub_minute_interval() {
+        // Three candles: t, t+30s, t+60s — delta between first two is 30_000 ms < 60_000.
+        let base = 1_700_000_000_000_i64;
+        let csv = format!(
+            "{HDR}\n{}\n{}\n{}\n",
+            row_ms(base),
+            row_ms(base + 30_000),            // +30 seconds — irregular
+            row_ms(base + 2 * ONE_MINUTE_MS), // +2 min — regular gap from original base
+        );
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::IrregularInterval)
+        );
+        assert!(r.quality.has_errors());
+    }
+
+    #[test]
+    fn does_not_flag_irregular_interval_for_valid_1m_sequence() {
+        let base = 1_700_000_000_000_i64;
+        let rows: String = (0..5)
+            .map(|i| row_ms(base + i * ONE_MINUTE_MS))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let csv = format!("{HDR}\n{rows}\n");
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert!(
+            !r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::IrregularInterval)
+        );
+    }
+
+    #[test]
+    fn still_detects_missing_gap_for_delta_above_60000() {
+        let base = 1_700_000_000_000_i64;
+        let csv = format!(
+            "{HDR}\n{}\n{}\n",
+            row_ms(base),
+            row_ms(base + 3 * ONE_MINUTE_MS), // 3m gap → 2 candles missing
+        );
+        let r = OhlcvLoader::load_csv("test", &csv);
+        assert_eq!(r.quality.missing_gaps.len(), 1);
+        assert_eq!(r.quality.missing_gaps[0].missing_count, 2);
+        assert!(
+            r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::MissingCandleGap)
+        );
+        assert!(
+            !r.quality
+                .issues
+                .iter()
+                .any(|i| i.kind == DataQualityIssueKind::IrregularInterval)
+        );
     }
 }

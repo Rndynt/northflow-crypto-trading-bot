@@ -11,7 +11,7 @@ pub enum Side {
 impl Side {
     pub fn as_str(self) -> &'static str {
         match self {
-            Side::Long  => "long",
+            Side::Long => "long",
             Side::Short => "short",
         }
     }

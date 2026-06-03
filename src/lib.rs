@@ -7,7 +7,6 @@
 pub mod advisor;
 pub mod config;
 pub mod core;
-pub mod data;
 pub mod execution;
 pub mod indicators;
 pub mod journal;
