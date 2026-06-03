@@ -33,6 +33,11 @@ impl Strategy for ScreenedVwapScalp {
         ctx: &StrategyContext,
         input: &MultiTimeframeInput,
     ) -> Result<Option<Signal>, NorthflowError> {
+        // ── 0. Defensive candle validation ───────────────────────────────────
+        input.entry_candle.validate()?;
+        input.confirmation_candle.validate()?;
+        input.screening_candle.validate()?;
+
         // ── 1. Required entry indicators ─────────────────────────────────────
         let ema_8 = match input.entry_indicators.ema_8 {
             Some(v) => v,
@@ -765,5 +770,57 @@ mod tests {
         };
         let result = strategy().evaluate(&default_ctx(), &input).unwrap();
         assert!(result.is_none(), "301 bps ATR should be invalid");
+    }
+
+    // ── Defensive candle validation tests ─────────────────────────────────────
+
+    fn invalid_geometry_candle() -> Candle {
+        Candle {
+            timestamp: 1_700_000_000_000,
+            open: 100.0,
+            high: 80.0,
+            low: 90.0,
+            close: 85.0,
+            volume: 1.0,
+        }
+    }
+
+    #[test]
+    fn returns_error_when_entry_candle_invalid() {
+        let mut input = long_input();
+        input.entry_candle = invalid_geometry_candle();
+        let result = strategy().evaluate(&default_ctx(), &input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn returns_error_when_confirmation_candle_invalid() {
+        let mut input = long_input();
+        input.confirmation_candle = invalid_geometry_candle();
+        let result = strategy().evaluate(&default_ctx(), &input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn returns_error_when_screening_candle_invalid() {
+        let mut input = long_input();
+        input.screening_candle = invalid_geometry_candle();
+        let result = strategy().evaluate(&default_ctx(), &input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn returns_error_when_entry_close_is_zero() {
+        let mut input = long_input();
+        input.entry_candle = Candle {
+            timestamp: 1_700_000_000_000,
+            open: 100.0,
+            high: 110.0,
+            low: 0.0,
+            close: 0.0,
+            volume: 100.0,
+        };
+        let result = strategy().evaluate(&default_ctx(), &input);
+        assert!(result.is_err());
     }
 }
