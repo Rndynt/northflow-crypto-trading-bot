@@ -45,18 +45,54 @@ pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
     println!("    strategy_id = \"{}\"", cfg.strategy_id);
     if cfg.strategy_id == "screened_vwap_scalp_v2" {
         let v2 = cfg.v2_config();
-        println!("    v2_require_strict_confirmation  = {}", v2.require_strict_confirmation);
-        println!("    v2_require_ema_ribbon_alignment = {}", v2.require_ema_ribbon_alignment);
-        println!("    v2_allow_neutral_confirmation   = {}", v2.allow_neutral_confirmation);
-        println!("    v2_min_expected_reward_bps      = {:.1}", v2.min_expected_reward_bps);
-        println!("    v2_min_expected_net_edge_bps    = {:.1}", v2.min_expected_net_edge_bps);
-        println!("    v2_min_atr_bps                  = {:.1}", v2.min_atr_bps);
-        println!("    v2_max_atr_bps                  = {:.1}", v2.max_atr_bps);
-        println!("    v2_tp_atr_multiple              = {:.2}", v2.tp_atr_multiple);
-        println!("    v2_sl_atr_multiple              = {:.2}", v2.sl_atr_multiple);
-        println!("    v2_min_volume_ratio             = {:.2}", v2.min_volume_ratio);
-        println!("    v2_vwap_distance_atr_min        = {:.2}", v2.vwap_distance_atr_min);
-        println!("    v2_vwap_distance_atr_max        = {:.2}", v2.vwap_distance_atr_max);
+        println!(
+            "    v2_require_strict_confirmation  = {}",
+            v2.require_strict_confirmation
+        );
+        println!(
+            "    v2_require_ema_ribbon_alignment = {}",
+            v2.require_ema_ribbon_alignment
+        );
+        println!(
+            "    v2_allow_neutral_confirmation   = {}",
+            v2.allow_neutral_confirmation
+        );
+        println!(
+            "    v2_min_expected_reward_bps      = {:.1}",
+            v2.min_expected_reward_bps
+        );
+        println!(
+            "    v2_min_expected_net_edge_bps    = {:.1}",
+            v2.min_expected_net_edge_bps
+        );
+        println!(
+            "    v2_min_atr_bps                  = {:.1}",
+            v2.min_atr_bps
+        );
+        println!(
+            "    v2_max_atr_bps                  = {:.1}",
+            v2.max_atr_bps
+        );
+        println!(
+            "    v2_tp_atr_multiple              = {:.2}",
+            v2.tp_atr_multiple
+        );
+        println!(
+            "    v2_sl_atr_multiple              = {:.2}",
+            v2.sl_atr_multiple
+        );
+        println!(
+            "    v2_min_volume_ratio             = {:.2}",
+            v2.min_volume_ratio
+        );
+        println!(
+            "    v2_vwap_distance_atr_min        = {:.2}",
+            v2.vwap_distance_atr_min
+        );
+        println!(
+            "    v2_vwap_distance_atr_max        = {:.2}",
+            v2.vwap_distance_atr_max
+        );
         println!("    v2_cooldown_bars                = {}", v2.cooldown_bars);
         println!("    v2_enable_long                  = {}", v2.enable_long);
         println!("    v2_enable_short                 = {}", v2.enable_short);

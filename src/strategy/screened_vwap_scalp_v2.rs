@@ -638,7 +638,11 @@ mod tests {
             .unwrap()
             .unwrap();
         // close=102, atr=1.0 → tp = 102 + 3.0 = 105.0
-        assert!((sig.take_profit - 105.0).abs() < 1e-9, "tp={}", sig.take_profit);
+        assert!(
+            (sig.take_profit - 105.0).abs() < 1e-9,
+            "tp={}",
+            sig.take_profit
+        );
     }
 
     #[test]
@@ -663,15 +667,33 @@ mod tests {
             .evaluate(&default_ctx(), &long_input())
             .unwrap()
             .unwrap();
-        assert!(sig.filters_passed.contains(&"screening_bullish".to_string()));
-        assert!(sig.filters_passed.contains(&"confirmation_bullish".to_string()));
+        assert!(
+            sig.filters_passed
+                .contains(&"screening_bullish".to_string())
+        );
+        assert!(
+            sig.filters_passed
+                .contains(&"confirmation_bullish".to_string())
+        );
         assert!(sig.filters_passed.contains(&"ema_ribbon_long".to_string()));
         assert!(sig.filters_passed.contains(&"atr_bps_in_range".to_string()));
-        assert!(sig.filters_passed.contains(&"near_vwap_or_ema21".to_string()));
+        assert!(
+            sig.filters_passed
+                .contains(&"near_vwap_or_ema21".to_string())
+        );
         assert!(sig.filters_passed.contains(&"volume_ratio_ok".to_string()));
-        assert!(sig.filters_passed.contains(&"expected_reward_ok".to_string()));
-        assert!(sig.filters_passed.contains(&"expected_net_edge_ok".to_string()));
-        assert!(sig.filters_passed.contains(&"direction_enabled".to_string()));
+        assert!(
+            sig.filters_passed
+                .contains(&"expected_reward_ok".to_string())
+        );
+        assert!(
+            sig.filters_passed
+                .contains(&"expected_net_edge_ok".to_string())
+        );
+        assert!(
+            sig.filters_passed
+                .contains(&"direction_enabled".to_string())
+        );
         assert!(sig.filters_passed.contains(&"confidence_ok".to_string()));
     }
 

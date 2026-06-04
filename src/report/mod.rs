@@ -76,11 +76,7 @@ impl AttributionWriter {
         )?;
         Self::write_bucket_csv(dir, "attribution_by_side.csv", &attribution.by_side)?;
         Self::write_bucket_csv(dir, "attribution_by_filter.csv", &attribution.by_filter)?;
-        Self::write_bucket_csv(
-            dir,
-            "attribution_by_strategy.csv",
-            &attribution.by_strategy,
-        )?;
+        Self::write_bucket_csv(dir, "attribution_by_strategy.csv", &attribution.by_strategy)?;
         Self::write_audit_json(dir, audit)?;
         manifest::ManifestWriter::write(reports_dir, manifest)?;
 

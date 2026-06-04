@@ -195,7 +195,7 @@ impl BacktestEngine {
             other => {
                 return Err(NorthflowError::ConfigError(format!(
                     "unknown strategy_id: '{other}'"
-                )))
+                )));
             }
         };
         let cooldown_bars = cfg.v2_cooldown_bars as usize;
@@ -384,8 +384,7 @@ impl BacktestEngine {
             // Cooldown: if v2_cooldown_bars > 0, skip strategy evaluation for
             // that many bars after the last signal was preapproved.
             let in_cooldown = cooldown_bars > 0
-                && last_signal_bar
-                    .map_or(false, |last| i.saturating_sub(last) <= cooldown_bars);
+                && last_signal_bar.map_or(false, |last| i.saturating_sub(last) <= cooldown_bars);
             if !entered_this_bar && open_position.is_none() && equity > 0.0 && !in_cooldown {
                 // No-lookahead rule:
                 //   signal_time = candle.timestamp + 60_000
@@ -789,7 +788,10 @@ mod tests {
         cfg.strategy_id = "screened_vwap_scalp_v2".to_string();
 
         let result = BacktestEngine::run(&cfg, &sym);
-        assert!(result.is_ok(), "v2 strategy must not return Err: {result:?}");
+        assert!(
+            result.is_ok(),
+            "v2 strategy must not return Err: {result:?}"
+        );
         assert!(result.unwrap().is_some(), "expected Some for valid CSV");
         std::fs::remove_file(&path).ok();
     }

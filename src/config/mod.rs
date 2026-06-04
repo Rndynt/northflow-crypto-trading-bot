@@ -229,12 +229,8 @@ impl ResearchConfig {
                     cfg.v2_min_expected_net_edge_bps =
                         parse_f64(value, cfg.v2_min_expected_net_edge_bps)
                 }
-                "v2_min_atr_bps" => {
-                    cfg.v2_min_atr_bps = parse_f64(value, cfg.v2_min_atr_bps)
-                }
-                "v2_max_atr_bps" => {
-                    cfg.v2_max_atr_bps = parse_f64(value, cfg.v2_max_atr_bps)
-                }
+                "v2_min_atr_bps" => cfg.v2_min_atr_bps = parse_f64(value, cfg.v2_min_atr_bps),
+                "v2_max_atr_bps" => cfg.v2_max_atr_bps = parse_f64(value, cfg.v2_max_atr_bps),
                 "v2_tp_atr_multiple" => {
                     cfg.v2_tp_atr_multiple = parse_f64(value, cfg.v2_tp_atr_multiple)
                 }
@@ -245,12 +241,10 @@ impl ResearchConfig {
                     cfg.v2_min_volume_ratio = parse_f64(value, cfg.v2_min_volume_ratio)
                 }
                 "v2_vwap_distance_atr_min" => {
-                    cfg.v2_vwap_distance_atr_min =
-                        parse_f64(value, cfg.v2_vwap_distance_atr_min)
+                    cfg.v2_vwap_distance_atr_min = parse_f64(value, cfg.v2_vwap_distance_atr_min)
                 }
                 "v2_vwap_distance_atr_max" => {
-                    cfg.v2_vwap_distance_atr_max =
-                        parse_f64(value, cfg.v2_vwap_distance_atr_max)
+                    cfg.v2_vwap_distance_atr_max = parse_f64(value, cfg.v2_vwap_distance_atr_max)
                 }
                 "v2_cooldown_bars" => {
                     cfg.v2_cooldown_bars = value.parse().unwrap_or(cfg.v2_cooldown_bars)
@@ -295,7 +289,7 @@ impl ResearchConfig {
                 return Err(NorthflowError::ConfigError(format!(
                     "unknown strategy_id: '{other}'. \
                      Valid values: 'screened_vwap_scalp', 'screened_vwap_scalp_v2'"
-                )))
+                )));
             }
         }
 
@@ -314,8 +308,7 @@ impl ResearchConfig {
                 "v2_min_expected_reward_bps must be finite and >= 0".to_string(),
             ));
         }
-        if !self.v2_min_expected_net_edge_bps.is_finite()
-            || self.v2_min_expected_net_edge_bps < 0.0
+        if !self.v2_min_expected_net_edge_bps.is_finite() || self.v2_min_expected_net_edge_bps < 0.0
         {
             return Err(NorthflowError::ConfigError(
                 "v2_min_expected_net_edge_bps must be finite and >= 0".to_string(),
@@ -563,8 +556,7 @@ mod tests {
 
     #[test]
     fn parses_v2_tp_sl_multipliers() {
-        let toml =
-            "[strategy]\nstrategy_id = \"screened_vwap_scalp_v2\"\nv2_tp_atr_multiple = 2.5\nv2_sl_atr_multiple = 1.0\n";
+        let toml = "[strategy]\nstrategy_id = \"screened_vwap_scalp_v2\"\nv2_tp_atr_multiple = 2.5\nv2_sl_atr_multiple = 1.0\n";
         let cfg = ResearchConfig::parse(toml);
         assert!((cfg.v2_tp_atr_multiple - 2.5).abs() < 1e-9);
         assert!((cfg.v2_sl_atr_multiple - 1.0).abs() < 1e-9);
