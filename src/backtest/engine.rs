@@ -39,7 +39,8 @@ use crate::indicators::{IndicatorEngine, IndicatorSnapshot};
 use crate::market::{CandleStore, OhlcvLoader};
 use crate::risk::{CostModelConfig, RiskContext, RiskEngine};
 use crate::strategy::{
-    MultiTimeframeInput, ScreenedVwapScalp, ScreenedVwapScalpV2, Strategy, StrategyContext,
+    EmaTrendPullbackV1, MultiTimeframeInput, ScreenedVwapScalp, ScreenedVwapScalpV2, Strategy,
+    StrategyContext,
 };
 
 // ── ActiveStrategy ────────────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ use crate::strategy::{
 enum ActiveStrategy {
     V1(ScreenedVwapScalp),
     V2(ScreenedVwapScalpV2),
+    Etp(EmaTrendPullbackV1),
 }
 
 impl ActiveStrategy {
@@ -58,6 +60,7 @@ impl ActiveStrategy {
         match self {
             Self::V1(s) => s.evaluate(ctx, input),
             Self::V2(s) => s.evaluate(ctx, input),
+            Self::Etp(s) => s.evaluate(ctx, input),
         }
     }
 }
@@ -192,13 +195,16 @@ impl BacktestEngine {
             "screened_vwap_scalp_v2" => {
                 ActiveStrategy::V2(ScreenedVwapScalpV2::new(cfg.v2_config()))
             }
+            "ema_trend_pullback_v1" => {
+                ActiveStrategy::Etp(EmaTrendPullbackV1::new(cfg.etp_config()))
+            }
             other => {
                 return Err(NorthflowError::ConfigError(format!(
                     "unknown strategy_id: '{other}'"
                 )));
             }
         };
-        let cooldown_bars = cfg.v2_cooldown_bars as usize;
+        let cooldown_bars = cfg.cooldown_bars_for_strategy(&cfg.strategy_id) as usize;
         let mut last_signal_bar: Option<usize> = None;
         let mut eng_1m = IndicatorEngine::new_default()?;
 

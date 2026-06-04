@@ -65,9 +65,31 @@ entry_geometry_mode = "reanchor_to_actual_entry"
 # strategy_run_mode = "single"
 # strategies = ["screened_vwap_scalp_v2"]
 
+# EMA Trend Pullback V1 — only used when strategy_id = "ema_trend_pullback_v1"
+etp_require_strict_15m_trend = true
+etp_require_strict_5m_confirmation = true
+etp_require_1m_ema_alignment = true
+etp_allow_long = true
+etp_allow_short = true
+etp_pullback_to = "ema21_or_vwap"
+etp_max_pullback_distance_atr = 1.25
+etp_min_pullback_distance_atr = 0.0
+etp_reclaim_mode = "close_reclaim"
+etp_min_body_ratio = 0.30
+etp_min_wick_rejection_ratio = 0.20
+etp_sl_atr_multiple = 1.0
+etp_tp_atr_multiple = 3.0
+etp_min_reward_risk = 2.5
+etp_min_atr_bps = 10.0
+etp_max_atr_bps = 180.0
+etp_min_expected_reward_bps = 30.0
+etp_min_expected_net_edge_bps = 12.0
+etp_min_volume_ratio = 1.0
+etp_cooldown_bars = 10
+
 # Comparison mode
 strategy_run_mode = "comparison"
-strategies = ["screened_vwap_scalp", "screened_vwap_scalp_v2"]
+strategies = ["screened_vwap_scalp", "screened_vwap_scalp_v2", "ema_trend_pullback_v1"]
 
 # To compare strategies, uncomment and switch to comparison mode:
 # strategy_run_mode = "comparison"

@@ -193,6 +193,27 @@ fn run_single_strategy(cfg: &ResearchConfig) -> Result<(), String> {
         println!("    v2_enable_long                  = {}", v2.enable_long);
         println!("    v2_enable_short                 = {}", v2.enable_short);
     }
+    if strategy_id == "ema_trend_pullback_v1" {
+        let etp = run_cfg.etp_config();
+        println!();
+        println!("EMA Trend Pullback V1 filters:");
+        println!("  pullback_to:               {}", etp.pullback_to);
+        println!("  reclaim_mode:              {}", etp.reclaim_mode);
+        println!("  TP ATR multiple:           {:.2}", etp.tp_atr_multiple);
+        println!("  SL ATR multiple:           {:.2}", etp.sl_atr_multiple);
+        println!("  min reward/risk:           {:.2}", etp.min_reward_risk);
+        println!(
+            "  min expected reward bps:   {:.2}",
+            etp.min_expected_reward_bps
+        );
+        println!(
+            "  min expected net edge bps: {:.2}",
+            etp.min_expected_net_edge_bps
+        );
+        println!("  min ATR bps:               {:.2}", etp.min_atr_bps);
+        println!("  max ATR bps:               {:.2}", etp.max_atr_bps);
+        println!("  cooldown bars:             {}", etp.cooldown_bars);
+    }
     println!("Reports dir: {}", run_cfg.reports_dir);
     println!();
 

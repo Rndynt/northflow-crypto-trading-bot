@@ -56,6 +56,63 @@ impl Default for V2Config {
     }
 }
 
+// ── EtpConfig ─────────────────────────────────────────────────────────────────
+
+/// Configuration for the ema_trend_pullback_v1 strategy.
+///
+/// All fields have safe defaults.  Unknown strategy_id must be rejected
+/// by `ResearchConfig::validate_strategy_config()` before use.
+#[derive(Debug, Clone)]
+pub struct EtpConfig {
+    pub require_strict_15m_trend: bool,
+    pub require_strict_5m_confirmation: bool,
+    pub require_1m_ema_alignment: bool,
+    pub allow_long: bool,
+    pub allow_short: bool,
+    pub pullback_to: String,
+    pub max_pullback_distance_atr: f64,
+    pub min_pullback_distance_atr: f64,
+    pub reclaim_mode: String,
+    pub min_body_ratio: f64,
+    pub min_wick_rejection_ratio: f64,
+    pub sl_atr_multiple: f64,
+    pub tp_atr_multiple: f64,
+    pub min_reward_risk: f64,
+    pub min_atr_bps: f64,
+    pub max_atr_bps: f64,
+    pub min_expected_reward_bps: f64,
+    pub min_expected_net_edge_bps: f64,
+    pub min_volume_ratio: f64,
+    pub cooldown_bars: u64,
+}
+
+impl Default for EtpConfig {
+    fn default() -> Self {
+        Self {
+            require_strict_15m_trend: true,
+            require_strict_5m_confirmation: true,
+            require_1m_ema_alignment: true,
+            allow_long: true,
+            allow_short: true,
+            pullback_to: "ema21_or_vwap".to_string(),
+            max_pullback_distance_atr: 1.25,
+            min_pullback_distance_atr: 0.0,
+            reclaim_mode: "close_reclaim".to_string(),
+            min_body_ratio: 0.30,
+            min_wick_rejection_ratio: 0.20,
+            sl_atr_multiple: 1.0,
+            tp_atr_multiple: 3.0,
+            min_reward_risk: 2.5,
+            min_atr_bps: 8.0,
+            max_atr_bps: 200.0,
+            min_expected_reward_bps: 25.0,
+            min_expected_net_edge_bps: 8.0,
+            min_volume_ratio: 1.0,
+            cooldown_bars: 10,
+        }
+    }
+}
+
 // ── ResearchConfig ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -111,6 +168,27 @@ pub struct ResearchConfig {
     pub v2_cooldown_bars: u64,
     pub v2_enable_long: bool,
     pub v2_enable_short: bool,
+    // etp strategy filters
+    pub etp_require_strict_15m_trend: bool,
+    pub etp_require_strict_5m_confirmation: bool,
+    pub etp_require_1m_ema_alignment: bool,
+    pub etp_allow_long: bool,
+    pub etp_allow_short: bool,
+    pub etp_pullback_to: String,
+    pub etp_max_pullback_distance_atr: f64,
+    pub etp_min_pullback_distance_atr: f64,
+    pub etp_reclaim_mode: String,
+    pub etp_min_body_ratio: f64,
+    pub etp_min_wick_rejection_ratio: f64,
+    pub etp_sl_atr_multiple: f64,
+    pub etp_tp_atr_multiple: f64,
+    pub etp_min_reward_risk: f64,
+    pub etp_min_atr_bps: f64,
+    pub etp_max_atr_bps: f64,
+    pub etp_min_expected_reward_bps: f64,
+    pub etp_min_expected_net_edge_bps: f64,
+    pub etp_min_volume_ratio: f64,
+    pub etp_cooldown_bars: u64,
 }
 
 impl Default for ResearchConfig {
@@ -156,6 +234,26 @@ impl Default for ResearchConfig {
             v2_cooldown_bars: 0,
             v2_enable_long: true,
             v2_enable_short: true,
+            etp_require_strict_15m_trend: true,
+            etp_require_strict_5m_confirmation: true,
+            etp_require_1m_ema_alignment: true,
+            etp_allow_long: true,
+            etp_allow_short: true,
+            etp_pullback_to: "ema21_or_vwap".to_string(),
+            etp_max_pullback_distance_atr: 1.25,
+            etp_min_pullback_distance_atr: 0.0,
+            etp_reclaim_mode: "close_reclaim".to_string(),
+            etp_min_body_ratio: 0.30,
+            etp_min_wick_rejection_ratio: 0.20,
+            etp_sl_atr_multiple: 1.0,
+            etp_tp_atr_multiple: 3.0,
+            etp_min_reward_risk: 2.5,
+            etp_min_atr_bps: 8.0,
+            etp_max_atr_bps: 200.0,
+            etp_min_expected_reward_bps: 25.0,
+            etp_min_expected_net_edge_bps: 8.0,
+            etp_min_volume_ratio: 1.0,
+            etp_cooldown_bars: 10,
         }
     }
 }
@@ -259,10 +357,107 @@ impl ResearchConfig {
                 }
                 "v2_enable_long" => cfg.v2_enable_long = value == "true",
                 "v2_enable_short" => cfg.v2_enable_short = value == "true",
+                // ETP filters
+                "etp_require_strict_15m_trend" => {
+                    cfg.etp_require_strict_15m_trend = value == "true"
+                }
+                "etp_require_strict_5m_confirmation" => {
+                    cfg.etp_require_strict_5m_confirmation = value == "true"
+                }
+                "etp_require_1m_ema_alignment" => {
+                    cfg.etp_require_1m_ema_alignment = value == "true"
+                }
+                "etp_allow_long" => cfg.etp_allow_long = value == "true",
+                "etp_allow_short" => cfg.etp_allow_short = value == "true",
+                "etp_pullback_to" => cfg.etp_pullback_to = value.to_string(),
+                "etp_max_pullback_distance_atr" => {
+                    cfg.etp_max_pullback_distance_atr =
+                        parse_f64(value, cfg.etp_max_pullback_distance_atr)
+                }
+                "etp_min_pullback_distance_atr" => {
+                    cfg.etp_min_pullback_distance_atr =
+                        parse_f64(value, cfg.etp_min_pullback_distance_atr)
+                }
+                "etp_reclaim_mode" => cfg.etp_reclaim_mode = value.to_string(),
+                "etp_min_body_ratio" => {
+                    cfg.etp_min_body_ratio = parse_f64(value, cfg.etp_min_body_ratio)
+                }
+                "etp_min_wick_rejection_ratio" => {
+                    cfg.etp_min_wick_rejection_ratio =
+                        parse_f64(value, cfg.etp_min_wick_rejection_ratio)
+                }
+                "etp_sl_atr_multiple" => {
+                    cfg.etp_sl_atr_multiple = parse_f64(value, cfg.etp_sl_atr_multiple)
+                }
+                "etp_tp_atr_multiple" => {
+                    cfg.etp_tp_atr_multiple = parse_f64(value, cfg.etp_tp_atr_multiple)
+                }
+                "etp_min_reward_risk" => {
+                    cfg.etp_min_reward_risk = parse_f64(value, cfg.etp_min_reward_risk)
+                }
+                "etp_min_atr_bps" => {
+                    cfg.etp_min_atr_bps = parse_f64(value, cfg.etp_min_atr_bps)
+                }
+                "etp_max_atr_bps" => {
+                    cfg.etp_max_atr_bps = parse_f64(value, cfg.etp_max_atr_bps)
+                }
+                "etp_min_expected_reward_bps" => {
+                    cfg.etp_min_expected_reward_bps =
+                        parse_f64(value, cfg.etp_min_expected_reward_bps)
+                }
+                "etp_min_expected_net_edge_bps" => {
+                    cfg.etp_min_expected_net_edge_bps =
+                        parse_f64(value, cfg.etp_min_expected_net_edge_bps)
+                }
+                "etp_min_volume_ratio" => {
+                    cfg.etp_min_volume_ratio = parse_f64(value, cfg.etp_min_volume_ratio)
+                }
+                "etp_cooldown_bars" => {
+                    cfg.etp_cooldown_bars = value.parse().unwrap_or(cfg.etp_cooldown_bars)
+                }
                 _ => {}
             }
         }
         cfg
+    }
+
+    /// Extract an `EtpConfig` from the etp_* fields of this `ResearchConfig`.
+    pub fn etp_config(&self) -> EtpConfig {
+        EtpConfig {
+            require_strict_15m_trend: self.etp_require_strict_15m_trend,
+            require_strict_5m_confirmation: self.etp_require_strict_5m_confirmation,
+            require_1m_ema_alignment: self.etp_require_1m_ema_alignment,
+            allow_long: self.etp_allow_long,
+            allow_short: self.etp_allow_short,
+            pullback_to: self.etp_pullback_to.clone(),
+            max_pullback_distance_atr: self.etp_max_pullback_distance_atr,
+            min_pullback_distance_atr: self.etp_min_pullback_distance_atr,
+            reclaim_mode: self.etp_reclaim_mode.clone(),
+            min_body_ratio: self.etp_min_body_ratio,
+            min_wick_rejection_ratio: self.etp_min_wick_rejection_ratio,
+            sl_atr_multiple: self.etp_sl_atr_multiple,
+            tp_atr_multiple: self.etp_tp_atr_multiple,
+            min_reward_risk: self.etp_min_reward_risk,
+            min_atr_bps: self.etp_min_atr_bps,
+            max_atr_bps: self.etp_max_atr_bps,
+            min_expected_reward_bps: self.etp_min_expected_reward_bps,
+            min_expected_net_edge_bps: self.etp_min_expected_net_edge_bps,
+            min_volume_ratio: self.etp_min_volume_ratio,
+            cooldown_bars: self.etp_cooldown_bars,
+        }
+    }
+
+    /// Returns the cooldown_bars for the given strategy_id.
+    ///
+    /// - `screened_vwap_scalp_v2`   → `v2_cooldown_bars`
+    /// - `ema_trend_pullback_v1`    → `etp_cooldown_bars`
+    /// - `screened_vwap_scalp` / unknown → 0
+    pub fn cooldown_bars_for_strategy(&self, strategy_id: &str) -> u64 {
+        match strategy_id {
+            "screened_vwap_scalp_v2" => self.v2_cooldown_bars,
+            "ema_trend_pullback_v1" => self.etp_cooldown_bars,
+            _ => 0,
+        }
     }
 
     /// Extract a `V2Config` from the v2_* fields of this `ResearchConfig`.
@@ -286,17 +481,21 @@ impl ResearchConfig {
         }
     }
 
-    /// Validate strategy_id and v2 numeric config.
+    /// Validate strategy_id and per-strategy numeric config.
     ///
-    /// Returns `Err` for unknown strategy_id or invalid v2 numeric values.
+    /// Returns `Err` for unknown strategy_id or invalid numeric values.
     /// Must be called before the backtest engine uses the strategy.
     pub fn validate_strategy_config(&self) -> Result<(), NorthflowError> {
         match self.strategy_id.as_str() {
             "screened_vwap_scalp" | "screened_vwap_scalp_v2" => {}
+            "ema_trend_pullback_v1" => {
+                return self.validate_etp_config();
+            }
             other => {
                 return Err(NorthflowError::ConfigError(format!(
                     "unknown strategy_id: '{other}'. \
-                     Valid values: 'screened_vwap_scalp', 'screened_vwap_scalp_v2'"
+                     Valid values: 'screened_vwap_scalp', 'screened_vwap_scalp_v2', \
+                     'ema_trend_pullback_v1'"
                 )));
             }
         }
@@ -354,6 +553,106 @@ impl ResearchConfig {
         Ok(())
     }
 
+    /// Validate ETP-specific config fields.
+    ///
+    /// Returns `Err` for unknown pullback_to / reclaim_mode or invalid numerics.
+    pub fn validate_etp_config(&self) -> Result<(), NorthflowError> {
+        match self.etp_pullback_to.as_str() {
+            "ema21" | "ema50" | "vwap" | "ema21_or_vwap" | "ema21_or_ema50_or_vwap" => {}
+            other => {
+                return Err(NorthflowError::ConfigError(format!(
+                    "unknown etp_pullback_to: '{other}'. \
+                     Valid values: 'ema21', 'ema50', 'vwap', 'ema21_or_vwap', \
+                     'ema21_or_ema50_or_vwap'"
+                )));
+            }
+        }
+        match self.etp_reclaim_mode.as_str() {
+            "close_reclaim" | "wick_rejection" | "close_reclaim_or_wick" => {}
+            other => {
+                return Err(NorthflowError::ConfigError(format!(
+                    "unknown etp_reclaim_mode: '{other}'. \
+                     Valid values: 'close_reclaim', 'wick_rejection', 'close_reclaim_or_wick'"
+                )));
+            }
+        }
+        if !self.etp_min_atr_bps.is_finite() || self.etp_min_atr_bps < 0.0 {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_atr_bps must be finite and >= 0".to_string(),
+            ));
+        }
+        if !self.etp_max_atr_bps.is_finite() || self.etp_max_atr_bps <= self.etp_min_atr_bps {
+            return Err(NorthflowError::ConfigError(
+                "etp_max_atr_bps must be finite and > etp_min_atr_bps".to_string(),
+            ));
+        }
+        if !self.etp_min_pullback_distance_atr.is_finite()
+            || self.etp_min_pullback_distance_atr < 0.0
+        {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_pullback_distance_atr must be finite and >= 0".to_string(),
+            ));
+        }
+        if !self.etp_max_pullback_distance_atr.is_finite()
+            || self.etp_max_pullback_distance_atr < self.etp_min_pullback_distance_atr
+        {
+            return Err(NorthflowError::ConfigError(
+                "etp_max_pullback_distance_atr must be finite and >= etp_min_pullback_distance_atr"
+                    .to_string(),
+            ));
+        }
+        if !self.etp_min_body_ratio.is_finite()
+            || self.etp_min_body_ratio < 0.0
+            || self.etp_min_body_ratio > 1.0
+        {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_body_ratio must be finite and in [0, 1]".to_string(),
+            ));
+        }
+        if !self.etp_min_wick_rejection_ratio.is_finite()
+            || self.etp_min_wick_rejection_ratio < 0.0
+            || self.etp_min_wick_rejection_ratio > 1.0
+        {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_wick_rejection_ratio must be finite and in [0, 1]".to_string(),
+            ));
+        }
+        if !self.etp_sl_atr_multiple.is_finite() || self.etp_sl_atr_multiple <= 0.0 {
+            return Err(NorthflowError::ConfigError(
+                "etp_sl_atr_multiple must be finite and > 0".to_string(),
+            ));
+        }
+        if !self.etp_tp_atr_multiple.is_finite() || self.etp_tp_atr_multiple <= 0.0 {
+            return Err(NorthflowError::ConfigError(
+                "etp_tp_atr_multiple must be finite and > 0".to_string(),
+            ));
+        }
+        if !self.etp_min_reward_risk.is_finite() || self.etp_min_reward_risk < 1.0 {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_reward_risk must be finite and >= 1.0".to_string(),
+            ));
+        }
+        if !self.etp_min_expected_reward_bps.is_finite() || self.etp_min_expected_reward_bps < 0.0
+        {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_expected_reward_bps must be finite and >= 0".to_string(),
+            ));
+        }
+        if !self.etp_min_expected_net_edge_bps.is_finite()
+            || self.etp_min_expected_net_edge_bps < 0.0
+        {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_expected_net_edge_bps must be finite and >= 0".to_string(),
+            ));
+        }
+        if !self.etp_min_volume_ratio.is_finite() || self.etp_min_volume_ratio < 0.0 {
+            return Err(NorthflowError::ConfigError(
+                "etp_min_volume_ratio must be finite and >= 0".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Validate strategy runner config: run mode, strategy list, duplicates, reserved modes.
     ///
     /// Must be called after `validate_strategy_config()`.
@@ -388,11 +687,12 @@ impl ResearchConfig {
         // Validate each strategy ID in strategies list.
         for s in &self.strategies {
             match s.as_str() {
-                "screened_vwap_scalp" | "screened_vwap_scalp_v2" => {}
+                "screened_vwap_scalp" | "screened_vwap_scalp_v2" | "ema_trend_pullback_v1" => {}
                 other => {
                     return Err(NorthflowError::ConfigError(format!(
                         "unknown strategy in strategies list: '{other}'. \
-                         Valid values: 'screened_vwap_scalp', 'screened_vwap_scalp_v2'"
+                         Valid values: 'screened_vwap_scalp', 'screened_vwap_scalp_v2', \
+                         'ema_trend_pullback_v1'"
                     )));
                 }
             }
@@ -872,5 +1172,144 @@ mod tests {
         assert!(cfg.validate_strategy_runner_config().is_ok());
         let strats = cfg.selected_strategies().unwrap();
         assert_eq!(strats, vec!["screened_vwap_scalp_v2"]);
+    }
+
+    // ── ETP config tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn parses_strategy_id_ema_trend_pullback_v1() {
+        let toml = "[strategy]\nstrategy_id = \"ema_trend_pullback_v1\"\n";
+        let cfg = ResearchConfig::parse(toml);
+        assert_eq!(cfg.strategy_id, "ema_trend_pullback_v1");
+        assert!(
+            cfg.validate_strategy_config().is_ok(),
+            "default etp config must pass validation"
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_strategy_id_still() {
+        let mut cfg = default_cfg();
+        cfg.strategy_id = "totally_unknown_xyz".to_string();
+        let err = cfg.validate_strategy_config().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("totally_unknown_xyz"),
+            "error must name the bad id: {msg}"
+        );
+    }
+
+    #[test]
+    fn parses_etp_defaults() {
+        let cfg = ResearchConfig::default();
+        let etp = cfg.etp_config();
+        assert!(etp.require_strict_15m_trend);
+        assert!(etp.require_1m_ema_alignment);
+        assert!(etp.allow_long);
+        assert!(etp.allow_short);
+        assert_eq!(etp.pullback_to, "ema21_or_vwap");
+        assert_eq!(etp.reclaim_mode, "close_reclaim");
+        assert!(etp.tp_atr_multiple > 0.0);
+        assert!(etp.sl_atr_multiple > 0.0);
+        assert!(etp.max_atr_bps > etp.min_atr_bps);
+    }
+
+    #[test]
+    fn parses_etp_pullback_to_ema21_or_vwap() {
+        let toml = "[strategy]\netp_pullback_to = \"ema21_or_vwap\"\n";
+        let cfg = ResearchConfig::parse(toml);
+        assert_eq!(cfg.etp_pullback_to, "ema21_or_vwap");
+    }
+
+    #[test]
+    fn rejects_unknown_etp_pullback_to() {
+        let mut cfg = default_cfg();
+        cfg.strategy_id = "ema_trend_pullback_v1".to_string();
+        cfg.etp_pullback_to = "fib_retracement".to_string();
+        let err = cfg.validate_strategy_config().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("fib_retracement"),
+            "error must name the bad value: {msg}"
+        );
+    }
+
+    #[test]
+    fn parses_etp_reclaim_mode_close_reclaim() {
+        let toml = "[strategy]\netp_reclaim_mode = \"close_reclaim\"\n";
+        let cfg = ResearchConfig::parse(toml);
+        assert_eq!(cfg.etp_reclaim_mode, "close_reclaim");
+    }
+
+    #[test]
+    fn rejects_unknown_etp_reclaim_mode() {
+        let mut cfg = default_cfg();
+        cfg.strategy_id = "ema_trend_pullback_v1".to_string();
+        cfg.etp_reclaim_mode = "magic_candle".to_string();
+        let err = cfg.validate_strategy_config().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("magic_candle"),
+            "error must name the bad value: {msg}"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_etp_atr_range() {
+        let mut cfg = default_cfg();
+        cfg.strategy_id = "ema_trend_pullback_v1".to_string();
+        cfg.etp_min_atr_bps = 100.0;
+        cfg.etp_max_atr_bps = 50.0; // max < min
+        let err = cfg.validate_strategy_config().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("etp_max_atr_bps"),
+            "error must mention the field: {msg}"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_etp_tp_sl_multiple() {
+        let mut cfg = default_cfg();
+        cfg.strategy_id = "ema_trend_pullback_v1".to_string();
+        cfg.etp_tp_atr_multiple = -1.0;
+        assert!(cfg.validate_strategy_config().is_err());
+
+        cfg.etp_tp_atr_multiple = 3.0;
+        cfg.etp_sl_atr_multiple = 0.0;
+        assert!(cfg.validate_strategy_config().is_err());
+    }
+
+    #[test]
+    fn cooldown_bars_for_strategy_returns_etp_value() {
+        let mut cfg = default_cfg();
+        cfg.etp_cooldown_bars = 15;
+        cfg.v2_cooldown_bars = 5;
+        assert_eq!(cfg.cooldown_bars_for_strategy("ema_trend_pullback_v1"), 15);
+        assert_eq!(cfg.cooldown_bars_for_strategy("screened_vwap_scalp_v2"), 5);
+        assert_eq!(cfg.cooldown_bars_for_strategy("screened_vwap_scalp"), 0);
+        assert_eq!(cfg.cooldown_bars_for_strategy("unknown"), 0);
+    }
+
+    #[test]
+    fn comparison_accepts_ema_trend_pullback_v1_in_strategies() {
+        let mut cfg = default_cfg();
+        cfg.strategy_run_mode = "comparison".to_string();
+        cfg.strategies = vec![
+            "screened_vwap_scalp".to_string(),
+            "screened_vwap_scalp_v2".to_string(),
+            "ema_trend_pullback_v1".to_string(),
+        ];
+        assert!(cfg.validate_strategy_runner_config().is_ok());
+    }
+
+    #[test]
+    fn unknown_strategy_validation_still_fails() {
+        let mut cfg = default_cfg();
+        cfg.strategy_run_mode = "comparison".to_string();
+        cfg.strategies = vec!["ema_trend_pullback_v1".to_string(), "bad_strat".to_string()];
+        let err = cfg.validate_strategy_runner_config().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("bad_strat"), "must name the bad strategy: {msg}");
     }
 }
