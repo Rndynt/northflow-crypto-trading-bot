@@ -1,0 +1,24 @@
+{
+  "phase": "phase_7_reports_and_attribution",
+  "generated_by": "northflow_research",
+  "files":   [
+    {"path":"v2_reanchor/attribution_by_exit_reason.csv","kind":"attribution_by_exit_reason","rows":3},
+    {"path":"v2_reanchor/attribution_by_filter.csv","kind":"attribution_by_filter","rows":13},
+    {"path":"v2_reanchor/attribution_by_regime.csv","kind":"attribution_by_regime","rows":2},
+    {"path":"v2_reanchor/attribution_by_side.csv","kind":"attribution_by_side","rows":2},
+    {"path":"v2_reanchor/attribution_by_strategy.csv","kind":"attribution_by_strategy","rows":1},
+    {"path":"v2_reanchor/attribution_summary.json","kind":"attribution_summary","rows":1},
+    {"path":"v2_reanchor/audit_report.json","kind":"audit","rows":1},
+    {"path":"v2_reanchor/backtest_summary.json","kind":"summary","rows":1},
+    {"path":"v2_reanchor/cost_edge_distribution.csv","kind":"cost_edge_distribution","rows":8},
+    {"path":"v2_reanchor/equity_curve.csv","kind":"equity_curve","rows":2338},
+    {"path":"v2_reanchor/monthly_summary.csv","kind":"monthly_summary","rows":12},
+    {"path":"v2_reanchor/rejection_by_stage_reason.csv","kind":"rejection_by_stage_reason","rows":1},
+    {"path":"v2_reanchor/report_manifest.json","kind":"manifest","rows":1},
+    {"path":"v2_reanchor/risk_rejections.csv","kind":"risk_rejections","rows":1006},
+    {"path":"v2_reanchor/signal_diagnostics.csv","kind":"signal_diagnostics","rows":2337},
+    {"path":"v2_reanchor/signal_flow_summary.json","kind":"signal_flow_summary","rows":1},
+    {"path":"v2_reanchor/trade_distribution_summary.json","kind":"trade_distribution_summary","rows":1},
+    {"path":"v2_reanchor/trades.csv","kind":"trades","rows":2337}
+  ]
+}
