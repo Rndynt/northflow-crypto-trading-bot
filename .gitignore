@@ -5,7 +5,7 @@ Cargo.lock
 
 # Output
 # reports/
-data/historical/
+# data/historical/
 
 # Editor
 .vscode/
