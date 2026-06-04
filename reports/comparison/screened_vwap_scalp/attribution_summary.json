@@ -1,13 +1,13 @@
 {
-  "total_trades": 2655,
-  "total_signals_with_trades": 2655,
-  "unique_signal_ids": 2655,
-  "unique_trade_ids": 2655,
-  "avg_expected_edge_bps": 12.338764,
-  "avg_actual_edge_bps": -20.292898,
-  "edge_realization_bps": -32.631663,
-  "positive_expected_edge_trades": 2655,
-  "positive_actual_edge_trades": 979,
-  "filters_passed_count": 15930,
+  "total_trades": 2896,
+  "total_signals_with_trades": 2896,
+  "unique_signal_ids": 2896,
+  "unique_trade_ids": 2896,
+  "avg_expected_edge_bps": 12.115001,
+  "avg_actual_edge_bps": -20.488472,
+  "edge_realization_bps": -32.603473,
+  "positive_expected_edge_trades": 2896,
+  "positive_actual_edge_trades": 1056,
+  "filters_passed_count": 17376,
   "filters_failed_count": 0
 }

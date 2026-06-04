@@ -395,12 +395,8 @@ impl ResearchConfig {
                 "etp_min_reward_risk" => {
                     cfg.etp_min_reward_risk = parse_f64(value, cfg.etp_min_reward_risk)
                 }
-                "etp_min_atr_bps" => {
-                    cfg.etp_min_atr_bps = parse_f64(value, cfg.etp_min_atr_bps)
-                }
-                "etp_max_atr_bps" => {
-                    cfg.etp_max_atr_bps = parse_f64(value, cfg.etp_max_atr_bps)
-                }
+                "etp_min_atr_bps" => cfg.etp_min_atr_bps = parse_f64(value, cfg.etp_min_atr_bps),
+                "etp_max_atr_bps" => cfg.etp_max_atr_bps = parse_f64(value, cfg.etp_max_atr_bps),
                 "etp_min_expected_reward_bps" => {
                     cfg.etp_min_expected_reward_bps =
                         parse_f64(value, cfg.etp_min_expected_reward_bps)
@@ -632,8 +628,7 @@ impl ResearchConfig {
                 "etp_min_reward_risk must be finite and >= 1.0".to_string(),
             ));
         }
-        if !self.etp_min_expected_reward_bps.is_finite() || self.etp_min_expected_reward_bps < 0.0
-        {
+        if !self.etp_min_expected_reward_bps.is_finite() || self.etp_min_expected_reward_bps < 0.0 {
             return Err(NorthflowError::ConfigError(
                 "etp_min_expected_reward_bps must be finite and >= 0".to_string(),
             ));
@@ -1310,6 +1305,9 @@ mod tests {
         cfg.strategies = vec!["ema_trend_pullback_v1".to_string(), "bad_strat".to_string()];
         let err = cfg.validate_strategy_runner_config().unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("bad_strat"), "must name the bad strategy: {msg}");
+        assert!(
+            msg.contains("bad_strat"),
+            "must name the bad strategy: {msg}"
+        );
     }
 }

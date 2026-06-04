@@ -1,15 +1,15 @@
 {
 "entry_geometry_mode": "reanchor_to_actual_entry",
-"signals_generated": 65468,
-"signals_preapproved": 2656,
-"signals_rejected_initial_risk": 62812,
+"signals_generated": 66483,
+"signals_preapproved": 2897,
+"signals_rejected_initial_risk": 63586,
 "signals_rejected_actual_entry": 1,
-"trades_opened": 2655,
-"trades_closed": 2655,
-"risk_rejections": 68483,
+"trades_opened": 2896,
+"trades_closed": 2896,
+"risk_rejections": 71638,
 "rejections_max_drawdown": 0,
-"rejections_daily_loss": 8210,
+"rejections_daily_loss": 11280,
 "rejections_reward_risk": 0,
-"rejections_expected_net_edge": 60273,
+"rejections_expected_net_edge": 60358,
 "rejections_other": 0
 }

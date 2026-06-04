@@ -1,0 +1,24 @@
+{
+  "phase": "phase_7_reports_and_attribution",
+  "generated_by": "northflow_research",
+  "files":   [
+    {"path":"ema_trend_pullback_v1/attribution_by_exit_reason.csv","kind":"attribution_by_exit_reason","rows":3},
+    {"path":"ema_trend_pullback_v1/attribution_by_filter.csv","kind":"attribution_by_filter","rows":17},
+    {"path":"ema_trend_pullback_v1/attribution_by_regime.csv","kind":"attribution_by_regime","rows":2},
+    {"path":"ema_trend_pullback_v1/attribution_by_side.csv","kind":"attribution_by_side","rows":2},
+    {"path":"ema_trend_pullback_v1/attribution_by_strategy.csv","kind":"attribution_by_strategy","rows":1},
+    {"path":"ema_trend_pullback_v1/attribution_summary.json","kind":"attribution_summary","rows":1},
+    {"path":"ema_trend_pullback_v1/audit_report.json","kind":"audit","rows":1},
+    {"path":"ema_trend_pullback_v1/backtest_summary.json","kind":"summary","rows":1},
+    {"path":"ema_trend_pullback_v1/cost_edge_distribution.csv","kind":"cost_edge_distribution","rows":8},
+    {"path":"ema_trend_pullback_v1/equity_curve.csv","kind":"equity_curve","rows":547},
+    {"path":"ema_trend_pullback_v1/monthly_summary.csv","kind":"monthly_summary","rows":12},
+    {"path":"ema_trend_pullback_v1/rejection_by_stage_reason.csv","kind":"rejection_by_stage_reason","rows":1},
+    {"path":"ema_trend_pullback_v1/report_manifest.json","kind":"manifest","rows":1},
+    {"path":"ema_trend_pullback_v1/risk_rejections.csv","kind":"risk_rejections","rows":1},
+    {"path":"ema_trend_pullback_v1/signal_diagnostics.csv","kind":"signal_diagnostics","rows":546},
+    {"path":"ema_trend_pullback_v1/signal_flow_summary.json","kind":"signal_flow_summary","rows":1},
+    {"path":"ema_trend_pullback_v1/trade_distribution_summary.json","kind":"trade_distribution_summary","rows":1},
+    {"path":"ema_trend_pullback_v1/trades.csv","kind":"trades","rows":546}
+  ]
+}

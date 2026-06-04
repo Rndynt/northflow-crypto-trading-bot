@@ -131,14 +131,10 @@ impl Strategy for EmaTrendPullbackV1 {
         // ── 6. 5m confirmation filter ─────────────────────────────────────────
         let confirmation_ok = match side {
             Side::Long => {
-                ema_21_5m > ema_50_5m
-                    && ema_50_5m > ema_200_5m
-                    && confirmation_close > ema_21_5m
+                ema_21_5m > ema_50_5m && ema_50_5m > ema_200_5m && confirmation_close > ema_21_5m
             }
             Side::Short => {
-                ema_21_5m < ema_50_5m
-                    && ema_50_5m < ema_200_5m
-                    && confirmation_close < ema_21_5m
+                ema_21_5m < ema_50_5m && ema_50_5m < ema_200_5m && confirmation_close < ema_21_5m
             }
         };
         if !confirmation_ok {
@@ -907,11 +903,13 @@ mod tests {
             "filters_passed must be populated"
         );
         assert!(
-            sig.filters_passed.contains(&"15m_trend_bullish".to_string()),
+            sig.filters_passed
+                .contains(&"15m_trend_bullish".to_string()),
             "must contain 15m_trend_bullish"
         );
         assert!(
-            sig.filters_passed.contains(&"5m_confirmation_bullish".to_string()),
+            sig.filters_passed
+                .contains(&"5m_confirmation_bullish".to_string()),
             "must contain 5m_confirmation_bullish"
         );
         assert!(

@@ -1,0 +1,15 @@
+{
+"total_trades": 546,
+"win_rate": 21.245421,
+"net_pnl": -4409.632359,
+"gross_pnl": -831.507751,
+"total_fee": 1595.544501,
+"total_slippage": 1982.580107,
+"profit_factor": 0.205748,
+"expectancy": -8.076250,
+"avg_win": 9.847421,
+"avg_loss": -12.911473,
+"max_drawdown": 88.239676,
+"max_consecutive_losses": 22,
+"avg_trade_duration": 358571.428571
+}

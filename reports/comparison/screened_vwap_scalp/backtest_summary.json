@@ -1,15 +1,15 @@
 {
-"total_trades": 2655,
-"win_rate": 36.873823,
-"net_pnl": -4999.036307,
-"gross_pnl": -699.793436,
-"total_fee": 2008.662540,
-"total_slippage": 2290.580332,
-"profit_factor": 0.135447,
-"expectancy": -1.882876,
-"avg_win": 0.799986,
-"avg_loss": -3.450014,
-"max_drawdown": 99.980798,
-"max_consecutive_losses": 15,
-"avg_trade_duration": 228293.785311
+"total_trades": 2896,
+"win_rate": 36.464088,
+"net_pnl": -4999.602521,
+"gross_pnl": -724.209048,
+"total_fee": 1995.860541,
+"total_slippage": 2279.532932,
+"profit_factor": 0.136471,
+"expectancy": -1.726382,
+"avg_win": 0.748228,
+"avg_loss": -3.146593,
+"max_drawdown": 99.992080,
+"max_consecutive_losses": 13,
+"avg_trade_duration": 226740.331492
 }

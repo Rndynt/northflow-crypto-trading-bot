@@ -1,0 +1,2 @@
+signal_id,stage,entry_geometry_mode,timestamp,side,regime,reason,equity,peak_equity,drawdown_pct,daily_realized_pnl,expected_reward_bps,expected_cost_bps,expected_net_edge_bps
+SIG-BT-0000005E,initial_risk,reanchor_to_actual_entry,1709752740000,long,bullish,daily_loss_limit_reached,3432.156837,5000.000000,31.356863,-175.583386,48.599424,19.000000,29.599424

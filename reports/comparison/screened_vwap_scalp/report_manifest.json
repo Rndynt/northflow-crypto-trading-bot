@@ -11,14 +11,14 @@
     {"path":"screened_vwap_scalp/audit_report.json","kind":"audit","rows":1},
     {"path":"screened_vwap_scalp/backtest_summary.json","kind":"summary","rows":1},
     {"path":"screened_vwap_scalp/cost_edge_distribution.csv","kind":"cost_edge_distribution","rows":8},
-    {"path":"screened_vwap_scalp/equity_curve.csv","kind":"equity_curve","rows":2656},
+    {"path":"screened_vwap_scalp/equity_curve.csv","kind":"equity_curve","rows":2897},
     {"path":"screened_vwap_scalp/monthly_summary.csv","kind":"monthly_summary","rows":12},
     {"path":"screened_vwap_scalp/rejection_by_stage_reason.csv","kind":"rejection_by_stage_reason","rows":3},
     {"path":"screened_vwap_scalp/report_manifest.json","kind":"manifest","rows":1},
-    {"path":"screened_vwap_scalp/risk_rejections.csv","kind":"risk_rejections","rows":68483},
-    {"path":"screened_vwap_scalp/signal_diagnostics.csv","kind":"signal_diagnostics","rows":2655},
+    {"path":"screened_vwap_scalp/risk_rejections.csv","kind":"risk_rejections","rows":71638},
+    {"path":"screened_vwap_scalp/signal_diagnostics.csv","kind":"signal_diagnostics","rows":2896},
     {"path":"screened_vwap_scalp/signal_flow_summary.json","kind":"signal_flow_summary","rows":1},
     {"path":"screened_vwap_scalp/trade_distribution_summary.json","kind":"trade_distribution_summary","rows":1},
-    {"path":"screened_vwap_scalp/trades.csv","kind":"trades","rows":2655}
+    {"path":"screened_vwap_scalp/trades.csv","kind":"trades","rows":2896}
   ]
 }

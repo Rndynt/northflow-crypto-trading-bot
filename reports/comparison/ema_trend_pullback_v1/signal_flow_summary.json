@@ -1,0 +1,15 @@
+{
+"entry_geometry_mode": "reanchor_to_actual_entry",
+"signals_generated": 547,
+"signals_preapproved": 546,
+"signals_rejected_initial_risk": 1,
+"signals_rejected_actual_entry": 0,
+"trades_opened": 546,
+"trades_closed": 546,
+"risk_rejections": 1,
+"rejections_max_drawdown": 0,
+"rejections_daily_loss": 1,
+"rejections_reward_risk": 0,
+"rejections_expected_net_edge": 0,
+"rejections_other": 0
+}
