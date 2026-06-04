@@ -116,11 +116,9 @@ pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
     match cfg.strategy_run_mode.as_str() {
         "single" => run_single_strategy(cfg),
         "comparison" => run_strategy_comparison(cfg),
-        "multi" => Err(
-            "multi-strategy portfolio backtest is not implemented yet; \
+        "multi" => Err("multi-strategy portfolio backtest is not implemented yet; \
              use strategy_run_mode = \"comparison\""
-                .to_string(),
-        ),
+            .to_string()),
         other => Err(format!(
             "unknown strategy_run_mode: '{other}'. \
              Valid values: 'single', 'comparison', 'multi'"
@@ -132,7 +130,10 @@ pub fn run_research(cfg: &ResearchConfig) -> Result<(), String> {
 
 fn run_single_strategy(cfg: &ResearchConfig) -> Result<(), String> {
     let strategies = cfg.selected_strategies().map_err(|e| format!("{e}"))?;
-    let strategy_id = strategies.into_iter().next().unwrap_or_else(|| cfg.strategy_id.clone());
+    let strategy_id = strategies
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| cfg.strategy_id.clone());
     let run_cfg = cfg.with_strategy_for_run(&strategy_id, cfg.reports_dir.clone());
 
     println!("Backtest run mode: single");
@@ -160,8 +161,14 @@ fn run_single_strategy(cfg: &ResearchConfig) -> Result<(), String> {
             "    v2_min_expected_net_edge_bps    = {:.1}",
             v2.min_expected_net_edge_bps
         );
-        println!("    v2_min_atr_bps                  = {:.1}", v2.min_atr_bps);
-        println!("    v2_max_atr_bps                  = {:.1}", v2.max_atr_bps);
+        println!(
+            "    v2_min_atr_bps                  = {:.1}",
+            v2.min_atr_bps
+        );
+        println!(
+            "    v2_max_atr_bps                  = {:.1}",
+            v2.max_atr_bps
+        );
         println!(
             "    v2_tp_atr_multiple              = {:.2}",
             v2.tp_atr_multiple
@@ -261,10 +268,7 @@ fn run_strategy_comparison(cfg: &ResearchConfig) -> Result<(), String> {
                     ));
                 }
                 Ok(None) => {
-                    let msg = format!(
-                        "no CSV found at {}/{symbol}.csv",
-                        cfg.data_dir
-                    );
+                    let msg = format!("no CSV found at {}/{symbol}.csv", cfg.data_dir);
                     println!("  {msg}");
                     println!();
                     runs.push(ComparisonRunResult::error(
@@ -480,17 +484,11 @@ fn run_symbol_verbose(cfg: &ResearchConfig, symbol: &str) {
             println!("    Total slippage:         {:.2}", run.total_slippage);
             println!("    Profit factor:          {pf_str}");
             println!("    Max drawdown:           {:.2}%", run.max_drawdown);
-            println!(
-                "    Max consecutive losses: {}",
-                run.max_consecutive_losses
-            );
+            println!("    Max consecutive losses: {}", run.max_consecutive_losses);
             println!();
 
             println!("  Signal flow:");
-            println!(
-                "    signals generated:          {}",
-                run.signals_generated
-            );
+            println!("    signals generated:          {}", run.signals_generated);
             println!(
                 "    signals preapproved:        {}",
                 run.signals_preapproved
@@ -556,10 +554,7 @@ fn run_symbol_verbose(cfg: &ResearchConfig, symbol: &str) {
             println!();
 
             println!("  Attribution summary:");
-            println!(
-                "    Unique signals:         {}",
-                run.attr_unique_signal_ids
-            );
+            println!("    Unique signals:         {}", run.attr_unique_signal_ids);
             println!(
                 "    Avg expected edge bps:  {:.2}",
                 run.attr_avg_expected_edge_bps
@@ -589,16 +584,10 @@ fn run_symbol_verbose(cfg: &ResearchConfig, symbol: &str) {
             let d = &run.trade_distribution;
             println!("  Diagnostic reports written:");
             println!("    {}/signal_diagnostics.csv", cfg.reports_dir);
-            println!(
-                "    {}/rejection_by_stage_reason.csv",
-                cfg.reports_dir
-            );
+            println!("    {}/rejection_by_stage_reason.csv", cfg.reports_dir);
             println!("    {}/monthly_summary.csv", cfg.reports_dir);
             println!("    {}/cost_edge_distribution.csv", cfg.reports_dir);
-            println!(
-                "    {}/trade_distribution_summary.json",
-                cfg.reports_dir
-            );
+            println!("    {}/trade_distribution_summary.json", cfg.reports_dir);
             println!("Diagnostics:");
             println!("  avg total cost bps:        {:.2}", d.avg_total_cost_bps);
             println!(

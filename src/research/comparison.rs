@@ -165,8 +165,7 @@ impl ComparisonWriter {
 
     // ── CSV ───────────────────────────────────────────────────────────────────
 
-    pub const CSV_HEADER: &'static str =
-        "symbol,strategy_id,reports_dir,status,error,total_trades,win_rate,net_pnl,gross_pnl,\
+    pub const CSV_HEADER: &'static str = "symbol,strategy_id,reports_dir,status,error,total_trades,win_rate,net_pnl,gross_pnl,\
          total_fee,total_slippage,total_cost,profit_factor,expectancy,max_drawdown,\
          max_consecutive_losses,avg_expected_edge_bps,avg_actual_edge_bps,\
          avg_edge_realization_bps,avg_total_cost_bps,signals_generated,signals_preapproved,\
@@ -409,11 +408,13 @@ mod tests {
     #[test]
     fn comparison_summary_csv_header_is_stable() {
         assert!(
-            ComparisonWriter::CSV_HEADER.starts_with("symbol,strategy_id,reports_dir,status,error,"),
+            ComparisonWriter::CSV_HEADER
+                .starts_with("symbol,strategy_id,reports_dir,status,error,"),
             "CSV header must start with required fields"
         );
         assert!(
-            ComparisonWriter::CSV_HEADER.contains("dominant_rejection_reason,dominant_rejection_count"),
+            ComparisonWriter::CSV_HEADER
+                .contains("dominant_rejection_reason,dominant_rejection_count"),
             "CSV header must end with rejection fields"
         );
     }
@@ -492,8 +493,7 @@ mod tests {
         };
         ComparisonWriter::write_all(&dir, &summary).unwrap();
 
-        let content =
-            std::fs::read_to_string(format!("{dir}/comparison_summary.json")).unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/comparison_summary.json")).unwrap();
         assert!(
             content.contains("\"mode\": \"comparison\""),
             "must have mode field"
@@ -519,10 +519,12 @@ mod tests {
         let summary = ComparisonSummary { runs: vec![] };
         ComparisonWriter::write_all(&dir, &summary).unwrap();
 
-        let content =
-            std::fs::read_to_string(format!("{dir}/comparison_summary.json")).unwrap();
+        let content = std::fs::read_to_string(format!("{dir}/comparison_summary.json")).unwrap();
         assert!(content.contains("\"mode\": \"comparison\""));
-        assert!(content.contains("[]"), "empty runs must produce empty array");
+        assert!(
+            content.contains("[]"),
+            "empty runs must produce empty array"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

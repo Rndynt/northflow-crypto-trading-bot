@@ -801,7 +801,10 @@ mod tests {
         cfg.strategies = vec!["screened_vwap_scalp".to_string(), "bad_strat".to_string()];
         let err = cfg.validate_strategy_runner_config().unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("bad_strat"), "must name the bad strategy: {msg}");
+        assert!(
+            msg.contains("bad_strat"),
+            "must name the bad strategy: {msg}"
+        );
     }
 
     #[test]
