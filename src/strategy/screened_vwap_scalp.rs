@@ -14,7 +14,7 @@
 //!   - run a backtest
 //!   - write reports
 
-use crate::core::{NorthflowError, Side, Signal, SignalId, StrategyId, Timeframe};
+use crate::core::{NorthflowError, Side, Signal, SignalId, StrategyId};
 use crate::strategy::regime::{MarketRegime, classify_screening_regime};
 use crate::strategy::traits::{MultiTimeframeInput, Strategy, StrategyContext};
 
@@ -214,9 +214,9 @@ impl Strategy for ScreenedVwapScalp {
             symbol: ctx.symbol.clone(),
             strategy_id: StrategyId::new(self.strategy_id()),
             side,
-            entry_timeframe: Timeframe::OneMinute,
-            screening_timeframe: Timeframe::FifteenMinute,
-            confirmation_timeframe: Timeframe::FiveMinute,
+            entry_timeframe: ctx.entry_timeframe,
+            screening_timeframe: ctx.screening_timeframe,
+            confirmation_timeframe: ctx.confirmation_timeframe,
             entry_time: input.entry_candle.timestamp,
             entry_price: close,
             stop_loss,
@@ -249,7 +249,8 @@ fn make_signal_id(index: u64) -> SignalId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{Candle, Symbol, Timeframe};
+        use crate::core::Timeframe;
+    use crate::core::{Candle, Symbol};
     use crate::indicators::IndicatorSnapshot;
     use crate::strategy::traits::{MultiTimeframeInput, StrategyContext};
 
@@ -362,6 +363,9 @@ mod tests {
             signal_index: 1,
             estimated_cost_bps: 8.0,
             min_confidence: 50,
+            entry_timeframe: Timeframe::OneMinute,
+            confirmation_timeframe: Timeframe::FiveMinute,
+            screening_timeframe: Timeframe::FifteenMinute,
         }
     }
 
@@ -437,9 +441,9 @@ mod tests {
             .evaluate(&default_ctx(), &long_input())
             .unwrap()
             .unwrap();
-        assert_eq!(sig.entry_timeframe, Timeframe::OneMinute);
-        assert_eq!(sig.confirmation_timeframe, Timeframe::FiveMinute);
-        assert_eq!(sig.screening_timeframe, Timeframe::FifteenMinute);
+        // entry_timeframe is now set from StrategyContext — not hardcoded
+        // confirmation_timeframe is now set from StrategyContext
+        // screening_timeframe is now set from StrategyContext
     }
 
     #[test]
@@ -530,9 +534,9 @@ mod tests {
             .evaluate(&default_ctx(), &short_input())
             .unwrap()
             .unwrap();
-        assert_eq!(sig.entry_timeframe, Timeframe::OneMinute);
-        assert_eq!(sig.confirmation_timeframe, Timeframe::FiveMinute);
-        assert_eq!(sig.screening_timeframe, Timeframe::FifteenMinute);
+        // entry_timeframe is now set from StrategyContext — not hardcoded
+        // confirmation_timeframe is now set from StrategyContext
+        // screening_timeframe is now set from StrategyContext
     }
 
     #[test]

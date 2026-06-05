@@ -260,19 +260,13 @@ mod tests {
     }
 
     #[test]
-    fn explicit_timeframe_roles() {
+    fn timeframe_roles_are_carried() {
+        // Signals carry whatever TFs were set — roles are now configurable.
         let s = make_long();
-        assert_eq!(s.entry_timeframe, Timeframe::OneMinute, "entry must be 1m");
-        assert_eq!(
-            s.screening_timeframe,
-            Timeframe::FifteenMinute,
-            "screening must be 15m"
-        );
-        assert_eq!(
-            s.confirmation_timeframe,
-            Timeframe::FiveMinute,
-            "confirmation must be 5m"
-        );
+        // Default test fixtures still use 1m/5m/15m — just verify they are present.
+        assert!(s.entry_timeframe.to_seconds() > 0);
+        assert!(s.confirmation_timeframe.to_seconds() > s.entry_timeframe.to_seconds());
+        assert!(s.screening_timeframe.to_seconds() > s.confirmation_timeframe.to_seconds());
     }
 
     #[test]

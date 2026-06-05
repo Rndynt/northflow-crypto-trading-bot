@@ -27,9 +27,10 @@ pub struct TimeframeBuilder;
 impl TimeframeBuilder {
     /// Build higher-timeframe candles from a slice of validated, sorted 1m candles.
     ///
-    /// Supported output timeframes: `FiveMinute`, `FifteenMinute`.
-    /// Returns an error if the timeframe cannot be aggregated from 1m
-    /// (e.g. `OneMinute` or `OneHour`).
+    /// Build higher-timeframe candles from 1m source candles.
+    ///
+    /// Supports all timeframes except OneMinute (pass raw candles directly for 1m entry).
+    /// Returns an error if tf == OneMinute.
     pub fn build(candles_1m: &[Candle], tf: Timeframe) -> Result<Vec<Candle>, NorthflowError> {
         if candles_1m.is_empty() {
             return Ok(Vec::new());
@@ -40,8 +41,7 @@ impl TimeframeBuilder {
 
         if required <= 1 {
             return Err(NorthflowError::InvalidTimeframe(format!(
-                "timeframe {tf} cannot be aggregated from 1m candles \
-                 (required={required}; use FiveMinute or FifteenMinute)"
+                "timeframe {tf} cannot be aggregated from 1m candles (required={required});                  pass raw 1m candles directly for OneMinute entry"
             )));
         }
 

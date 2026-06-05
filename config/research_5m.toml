@@ -1,0 +1,81 @@
+# research_5m.toml — Higher timeframe config: entry=5m, confirmation=1h, screening=4h
+#
+# Rationale: 1m scalping is too cost-heavy (avg cost ~17 bps vs small ATR moves).
+# Moving to 5m entry gives bigger moves per trade, same cost → better edge.
+# 1h/4h confirmation/screening = higher quality signals, fewer but better trades.
+
+symbols = ["BTCUSDT"]
+
+# ── Timeframe Roles ──────────────────────────────────────────────────────────
+entry_timeframe        = "5m"
+confirmation_timeframe = "1h"
+screening_timeframe    = "4h"
+
+# ── Data / Output ─────────────────────────────────────────────────────────────
+data_dir    = "data/historical"
+reports_dir = "reports/research_5m"
+
+# ── Strategy Selection ────────────────────────────────────────────────────────
+strategy_run_mode = "comparison"
+strategies = ["screened_vwap_scalp_v2", "ema_trend_pullback_v1"]
+
+# ── Risk Parameters ───────────────────────────────────────────────────────────
+initial_equity_usd   = 5000.0
+risk_per_trade_pct   = 0.5       # Can risk slightly more per trade (less freq)
+max_open_positions   = 1
+max_leverage         = 3.0
+min_reward_risk      = 1.5
+max_daily_loss_pct   = 5.0
+max_drawdown_pct     = 20.0
+
+# ── Cost Model ────────────────────────────────────────────────────────────────
+taker_fee_bps        = 4.0
+slippage_bps         = 2.0
+spread_bps           = 1.0
+market_impact_bps    = 1.0
+stop_slippage_bps    = 5.0
+
+# ── Backtest Settings ─────────────────────────────────────────────────────────
+conservative_intrabar  = true
+max_bars_held          = 48      # 48 × 5m = 4 hours max hold
+min_confidence         = 65
+entry_geometry_mode    = "reanchor_to_actual_entry"
+
+# ── V2 Strategy Filters (tuned for higher TFs) ───────────────────────────────
+v2_require_strict_confirmation  = true
+v2_require_ema_ribbon_alignment = true
+v2_allow_neutral_confirmation   = false
+v2_min_expected_reward_bps      = 50.0   # Higher threshold — bigger moves expected
+v2_min_expected_net_edge_bps    = 30.0   # vs 10.0 on 1m
+v2_min_atr_bps                  = 10.0
+v2_max_atr_bps                  = 200.0
+v2_tp_atr_multiple              = 2.5
+v2_sl_atr_multiple              = 1.0
+v2_min_volume_ratio             = 1.0
+v2_vwap_distance_atr_min        = 0.0
+v2_vwap_distance_atr_max        = 1.5
+v2_cooldown_bars                = 3
+v2_enable_long                  = true
+v2_enable_short                 = true
+
+# ── ETP Strategy Filters (tuned for higher TFs) ───────────────────────────────
+etp_require_strict_screening_trend    = true
+etp_require_strict_confirmation_trend = true
+etp_require_entry_ema_alignment       = true
+etp_allow_long                        = true
+etp_allow_short                       = true
+etp_pullback_to                       = "ema21_or_vwap"
+etp_max_pullback_distance_atr         = 1.5
+etp_min_pullback_distance_atr         = 0.0
+etp_reclaim_mode                      = "close_reclaim_or_wick"
+etp_min_body_ratio                    = 0.25
+etp_min_wick_rejection_ratio          = 0.20
+etp_sl_atr_multiple                   = 1.0
+etp_tp_atr_multiple                   = 3.0
+etp_min_reward_risk                   = 2.5
+etp_min_atr_bps                       = 10.0
+etp_max_atr_bps                       = 300.0
+etp_min_expected_reward_bps           = 50.0
+etp_min_expected_net_edge_bps         = 30.0
+etp_min_volume_ratio                  = 1.0
+etp_cooldown_bars                     = 5

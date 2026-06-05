@@ -5,7 +5,7 @@
 //!   - Strategies must not call exchange APIs, LLMs, or mutate account state.
 //!   - Output is Result<Option<Signal>, NorthflowError> — a Signal, not an order.
 
-use crate::core::{Candle, NorthflowError, Signal, Symbol};
+use crate::core::{Candle, NorthflowError, Signal, Symbol, Timeframe};
 use crate::indicators::IndicatorSnapshot;
 
 // ── StrategyContext ───────────────────────────────────────────────────────────
@@ -23,29 +23,33 @@ pub struct StrategyContext {
     pub estimated_cost_bps: f64,
     /// Minimum confidence score required to emit a signal (0–100).
     pub min_confidence: u8,
+    /// Entry timeframe for this run (e.g. 1m, 5m).
+    pub entry_timeframe: Timeframe,
+    /// Confirmation timeframe for this run (e.g. 5m, 1h).
+    pub confirmation_timeframe: Timeframe,
+    /// Screening timeframe for this run (e.g. 15m, 4h).
+    pub screening_timeframe: Timeframe,
 }
 
 // ── MultiTimeframeInput ───────────────────────────────────────────────────────
 
 /// The complete, role-labelled multi-timeframe input for one evaluation.
 ///
-/// Timeframe roles are explicit — never inferred from array order:
-///   - `entry`        = 1m  (entry and execution signal timeframe)
-///   - `confirmation` = 5m  (intermediate confirmation layer)
-///   - `screening`    = 15m (market regime / bias filter)
+/// Timeframe roles are explicit — never inferred from array order.
+/// The actual timeframe values are configured at run time via ResearchConfig.
 #[derive(Debug, Clone)]
 pub struct MultiTimeframeInput {
-    /// 1m candle at the evaluation moment.
+    /// Entry-timeframe candle at the evaluation moment.
     pub entry_candle: Candle,
-    /// 5m candle at the evaluation moment.
+    /// Confirmation-timeframe candle at the evaluation moment.
     pub confirmation_candle: Candle,
-    /// 15m candle at the evaluation moment.
+    /// Screening-timeframe candle at the evaluation moment.
     pub screening_candle: Candle,
-    /// Indicator snapshot computed from the 1m candle stream.
+    /// Indicator snapshot computed from the entry-timeframe candle stream.
     pub entry_indicators: IndicatorSnapshot,
-    /// Indicator snapshot computed from the 5m candle stream.
+    /// Indicator snapshot computed from the confirmation-timeframe candle stream.
     pub confirmation_indicators: IndicatorSnapshot,
-    /// Indicator snapshot computed from the 15m candle stream.
+    /// Indicator snapshot computed from the screening-timeframe candle stream.
     pub screening_indicators: IndicatorSnapshot,
 }
 

@@ -127,28 +127,35 @@ impl BacktestEngine {
             return Ok(None);
         }
 
-        // Build candle store.
-        let store = CandleStore::build_from_1m(load_result.candles)?;
+        // Parse timeframe roles from config.
+        let entry_tf = crate::core::Timeframe::from_str(&cfg.entry_timeframe)
+            .map_err(|e| NorthflowError::ConfigError(format!("entry_timeframe: {e}")))?;
+        let confirmation_tf = crate::core::Timeframe::from_str(&cfg.confirmation_timeframe)
+            .map_err(|e| NorthflowError::ConfigError(format!("confirmation_timeframe: {e}")))?;
+        let screening_tf = crate::core::Timeframe::from_str(&cfg.screening_timeframe)
+            .map_err(|e| NorthflowError::ConfigError(format!("screening_timeframe: {e}")))?;
 
-        if store.one_minute.is_empty() {
+        // Build candle store with configured TF roles.
+        let store = CandleStore::build(load_result.candles, entry_tf, confirmation_tf, screening_tf)?;
+
+        if store.entry_candles.is_empty() {
             return Ok(None);
         }
 
-        // Precompute 5m snapshots — iterate all completed 5m candles through
-        // a fresh IndicatorEngine, storing (timestamp, snapshot, candle).
-        let mut eng_5m = IndicatorEngine::new_default()?;
-        let mut snaps_5m: Vec<(i64, IndicatorSnapshot, Candle)> = Vec::new();
-        for &c in &store.five_minute {
-            let snap = eng_5m.next(c)?;
-            snaps_5m.push((c.timestamp, snap, c));
+        // Precompute confirmation-TF snapshots (no-lookahead lookup at eval time).
+        let mut eng_conf = IndicatorEngine::new_default()?;
+        let mut snaps_conf: Vec<(i64, IndicatorSnapshot, Candle)> = Vec::new();
+        for &c in &store.confirmation_candles {
+            let snap = eng_conf.next(c)?;
+            snaps_conf.push((c.timestamp, snap, c));
         }
 
-        // Precompute 15m snapshots.
-        let mut eng_15m = IndicatorEngine::new_default()?;
-        let mut snaps_15m: Vec<(i64, IndicatorSnapshot, Candle)> = Vec::new();
-        for &c in &store.fifteen_minute {
-            let snap = eng_15m.next(c)?;
-            snaps_15m.push((c.timestamp, snap, c));
+        // Precompute screening-TF snapshots.
+        let mut eng_screen = IndicatorEngine::new_default()?;
+        let mut snaps_screen: Vec<(i64, IndicatorSnapshot, Candle)> = Vec::new();
+        for &c in &store.screening_candles {
+            let snap = eng_screen.next(c)?;
+            snaps_screen.push((c.timestamp, snap, c));
         }
 
         let geometry_mode = EntryGeometryMode::parse(&cfg.entry_geometry_mode)?;
@@ -175,7 +182,7 @@ impl BacktestEngine {
         let mut equity_curve: Vec<EquityPoint> = Vec::new();
 
         // Initial equity point.
-        if let Some(first) = store.one_minute.first() {
+        if let Some(first) = store.entry_candles.first() {
             equity_curve.push(EquityPoint {
                 timestamp: first.timestamp,
                 equity,
@@ -208,11 +215,11 @@ impl BacktestEngine {
         let mut last_signal_bar: Option<usize> = None;
         let mut eng_1m = IndicatorEngine::new_default()?;
 
-        let one_minute = &store.one_minute;
-        let n = one_minute.len();
+        let entry_candles = &store.entry_candles;
+        let n = entry_candles.len();
 
         for i in 0..n {
-            let candle = one_minute[i];
+            let candle = entry_candles[i];
 
             if i > 0 && i % 50_000 == 0 {
                 println!(
@@ -392,15 +399,17 @@ impl BacktestEngine {
             let in_cooldown = cooldown_bars > 0
                 && last_signal_bar.map_or(false, |last| i.saturating_sub(last) <= cooldown_bars);
             if !entered_this_bar && open_position.is_none() && equity > 0.0 && !in_cooldown {
-                // No-lookahead rule:
-                //   signal_time = candle.timestamp + 60_000
-                //   5m available: 5m_ts + 300_000 <= signal_time → 5m_ts <= candle.ts - 240_000
-                //   15m available: 15m_ts + 900_000 <= signal_time → 15m_ts <= candle.ts - 840_000
-                let max_5m_ts = candle.timestamp - 240_000;
-                let max_15m_ts = candle.timestamp - 840_000;
+                // No-lookahead rule (generic):
+                //   signal_time = candle.timestamp + entry_tf.to_millis()
+                //   conf available: conf_ts + conf_tf.to_millis() <= signal_time
+                //     → conf_ts <= candle.ts + entry_tf.to_millis() - conf_tf.to_millis()
+                //   screen available: screen_ts + screen_tf.to_millis() <= signal_time
+                //     → screen_ts <= candle.ts + entry_tf.to_millis() - screen_tf.to_millis()
+                let max_conf_ts   = candle.timestamp + entry_tf.to_millis() - confirmation_tf.to_millis();
+                let max_screen_ts = candle.timestamp + entry_tf.to_millis() - screening_tf.to_millis();
 
-                let snap5 = latest_snap(&snaps_5m, max_5m_ts);
-                let snap15 = latest_snap(&snaps_15m, max_15m_ts);
+                let snap5 = latest_snap(&snaps_conf, max_conf_ts);
+                let snap15 = latest_snap(&snaps_screen, max_screen_ts);
 
                 if let (Some((_, s5, c5)), Some((_, s15, c15))) = (snap5, snap15) {
                     let estimated_cost = cost_cfg.taker_fee_bps * 2.0
@@ -412,6 +421,9 @@ impl BacktestEngine {
                         signal_index: signal_counter + 1,
                         estimated_cost_bps: estimated_cost,
                         min_confidence: cfg.min_confidence,
+                        entry_timeframe: entry_tf,
+                        confirmation_timeframe: confirmation_tf,
+                        screening_timeframe: screening_tf,
                     };
 
                     let input = MultiTimeframeInput {
@@ -471,7 +483,7 @@ impl BacktestEngine {
 
         // ── End of backtest: close any remaining position ─────────────────────
         if let Some(ref pos) = open_position {
-            if let Some(&last) = one_minute.last() {
+            if let Some(&last) = entry_candles.last() {
                 let exit = FillModel::end_of_backtest_exit(
                     pos,
                     &last,

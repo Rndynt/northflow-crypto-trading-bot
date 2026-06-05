@@ -15,7 +15,6 @@ use std::path::Path;
 
 use crate::backtest::{BacktestEngine, ReportWriter};
 use crate::config::ResearchConfig;
-use crate::core::Timeframe;
 use crate::market::{DataQualityIssueKind, OhlcvLoader};
 use crate::report::{
     AttributionEngine, AttributionSummary, AttributionWriter, AuditSeverity, DiagnosticEngine,
@@ -629,7 +628,7 @@ fn run_symbol_verbose(cfg: &ResearchConfig, symbol: &str) {
 // ── Data quality printer ──────────────────────────────────────────────────────
 
 /// Print data quality for the symbol.  Returns `true` if no errors.
-fn print_data_quality(_cfg: &ResearchConfig, symbol: &str, csv_path: &Path) -> bool {
+fn print_data_quality(cfg: &ResearchConfig, symbol: &str, csv_path: &Path) -> bool {
     use crate::market::CandleStore;
 
     let load_result = match OhlcvLoader::load_file(csv_path) {
@@ -641,7 +640,19 @@ fn print_data_quality(_cfg: &ResearchConfig, symbol: &str, csv_path: &Path) -> b
     };
 
     let quality = &load_result.quality;
-    let store = match CandleStore::build_from_1m(load_result.candles) {
+    let entry_tf = match crate::core::Timeframe::from_str(&cfg.entry_timeframe) {
+        Ok(tf) => tf,
+        Err(e) => { println!("  Invalid entry_timeframe: {e}"); return false; }
+    };
+    let confirmation_tf = match crate::core::Timeframe::from_str(&cfg.confirmation_timeframe) {
+        Ok(tf) => tf,
+        Err(e) => { println!("  Invalid confirmation_timeframe: {e}"); return false; }
+    };
+    let screening_tf = match crate::core::Timeframe::from_str(&cfg.screening_timeframe) {
+        Ok(tf) => tf,
+        Err(e) => { println!("  Invalid screening_timeframe: {e}"); return false; }
+    };
+    let store = match CandleStore::build(load_result.candles, entry_tf, confirmation_tf, screening_tf) {
         Ok(s) => s,
         Err(e) => {
             println!("  Error building candle store: {e}");
@@ -657,14 +668,21 @@ fn print_data_quality(_cfg: &ResearchConfig, symbol: &str, csv_path: &Path) -> b
 
     println!("Symbol:                {symbol}");
     println!("Source:                {}", csv_path.display());
-    println!("1m candles:            {}", store.len(Timeframe::OneMinute));
+    println!("Raw 1m candles:        {}", store.raw_1m.len());
     println!(
-        "5m candles:            {}",
-        store.len(Timeframe::FiveMinute)
+        "Entry ({}) candles:   {}",
+        store.entry_tf,
+        store.entry_len()
     );
     println!(
-        "15m candles:           {}",
-        store.len(Timeframe::FifteenMinute)
+        "Confirmation ({}) candles: {}",
+        store.confirmation_tf,
+        store.confirmation_len()
+    );
+    println!(
+        "Screening ({}) candles: {}",
+        store.screening_tf,
+        store.screening_len()
     );
     println!("Data quality errors:   {}", quality.error_count());
     println!("Duplicate timestamps:  {dup_count}");

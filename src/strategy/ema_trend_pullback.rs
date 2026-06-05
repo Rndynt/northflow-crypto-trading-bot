@@ -17,7 +17,7 @@
 //! No orders, no exchange calls, no LLMs, no auto-tuning.
 
 use crate::config::EtpConfig;
-use crate::core::{NorthflowError, Side, Signal, SignalId, StrategyId, Timeframe};
+use crate::core::{NorthflowError, Side, Signal, SignalId, StrategyId};
 use crate::strategy::traits::{MultiTimeframeInput, Strategy, StrategyContext};
 
 // ── EmaTrendPullbackV1 ────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ impl Strategy for EmaTrendPullbackV1 {
             Side::Long => ema_8 > ema_21 && ema_21 > ema_50 && entry_close >= ema_21,
             Side::Short => ema_8 < ema_21 && ema_21 < ema_50 && entry_close <= ema_21,
         };
-        if self.cfg.require_1m_ema_alignment && !ema_aligned {
+        if self.cfg.require_entry_ema_alignment && !ema_aligned {
             return Ok(None);
         }
 
@@ -378,9 +378,9 @@ impl Strategy for EmaTrendPullbackV1 {
             symbol: ctx.symbol.clone(),
             strategy_id: StrategyId::new("ema_trend_pullback_v1"),
             side,
-            entry_timeframe: Timeframe::OneMinute,
-            screening_timeframe: Timeframe::FifteenMinute,
-            confirmation_timeframe: Timeframe::FiveMinute,
+            entry_timeframe: ctx.entry_timeframe,
+            screening_timeframe: ctx.screening_timeframe,
+            confirmation_timeframe: ctx.confirmation_timeframe,
             entry_time: candle.timestamp,
             entry_price: entry,
             stop_loss,
@@ -402,6 +402,7 @@ impl Strategy for EmaTrendPullbackV1 {
 #[cfg(test)]
 mod tests {
     use super::*;
+        use crate::core::Timeframe;
     use crate::core::{Candle, Symbol};
     use crate::indicators::IndicatorSnapshot;
     use crate::strategy::traits::MultiTimeframeInput;
@@ -418,6 +419,9 @@ mod tests {
             signal_index: 1,
             estimated_cost_bps: 8.0,
             min_confidence: 50,
+            entry_timeframe: Timeframe::OneMinute,
+            confirmation_timeframe: Timeframe::FiveMinute,
+            screening_timeframe: Timeframe::FifteenMinute,
         }
     }
 
@@ -639,7 +643,7 @@ mod tests {
     #[test]
     fn etp_long_requires_1m_ema_alignment() {
         let mut cfg = good_cfg();
-        cfg.require_1m_ema_alignment = true;
+        cfg.require_entry_ema_alignment = true;
         let strat = EmaTrendPullbackV1::new(cfg);
         let mut input = good_long_input();
         // Break alignment: ema_8 < ema_21
@@ -650,7 +654,7 @@ mod tests {
     #[test]
     fn etp_short_requires_1m_ema_alignment() {
         let mut cfg = good_cfg();
-        cfg.require_1m_ema_alignment = true;
+        cfg.require_entry_ema_alignment = true;
         let strat = EmaTrendPullbackV1::new(cfg);
         let mut input = good_short_input();
         // Break alignment for short: ema_8 should be < ema_21; set it above
@@ -681,7 +685,7 @@ mod tests {
     fn etp_accepts_pullback_near_ema21() {
         let mut cfg = good_cfg();
         cfg.pullback_to = "ema21".to_string();
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         let strat = EmaTrendPullbackV1::new(cfg);
         let input = good_long_input();
         // distance = |50005 - 49990| = 15, atr=100 → 0.15 ATR → within [0, 1.25]
@@ -692,7 +696,7 @@ mod tests {
     fn etp_accepts_pullback_near_vwap() {
         let mut cfg = good_cfg();
         cfg.pullback_to = "vwap".to_string();
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         let strat = EmaTrendPullbackV1::new(cfg);
         let mut input = good_long_input();
         // vwap = 49_950, close = 50_005 → dist = 55, atr=100 → 0.55 ATR → within range
@@ -730,7 +734,7 @@ mod tests {
         cfg.reclaim_mode = "wick_rejection".to_string();
         cfg.min_wick_rejection_ratio = 0.20;
         cfg.min_body_ratio = 0.30;
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         let strat = EmaTrendPullbackV1::new(cfg);
 
         let mut input = good_long_input();
@@ -749,7 +753,7 @@ mod tests {
         cfg.reclaim_mode = "wick_rejection".to_string();
         cfg.min_wick_rejection_ratio = 0.20;
         cfg.min_body_ratio = 0.30;
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         let strat = EmaTrendPullbackV1::new(cfg);
 
         let mut input = good_short_input();
@@ -822,7 +826,7 @@ mod tests {
     #[test]
     fn etp_uses_configurable_tp_atr_multiple() {
         let mut cfg = good_cfg();
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         cfg.tp_atr_multiple = 5.0;
         let strat = EmaTrendPullbackV1::new(cfg);
         let input = good_long_input();
@@ -840,7 +844,7 @@ mod tests {
     #[test]
     fn etp_uses_configurable_sl_atr_multiple() {
         let mut cfg = good_cfg();
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         cfg.sl_atr_multiple = 2.0;
         // tp=3.0, sl=2.0 → rr=1.5; lower min_reward_risk so the signal passes
         cfg.min_reward_risk = 1.0;
@@ -862,7 +866,7 @@ mod tests {
     #[test]
     fn etp_emits_long_signal_with_valid_geometry() {
         let mut cfg = good_cfg();
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         let strat = EmaTrendPullbackV1::new(cfg);
         let input = good_long_input();
         let sig = strat.evaluate(&ctx(), &input).unwrap().unwrap();
@@ -875,7 +879,7 @@ mod tests {
     #[test]
     fn etp_emits_short_signal_with_valid_geometry() {
         let mut cfg = good_cfg();
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         let strat = EmaTrendPullbackV1::new(cfg);
         let input = good_short_input();
         let sig = strat.evaluate(&ctx(), &input).unwrap().unwrap();
@@ -894,7 +898,7 @@ mod tests {
     #[test]
     fn etp_filters_passed_are_populated() {
         let mut cfg = good_cfg();
-        cfg.require_1m_ema_alignment = false;
+        cfg.require_entry_ema_alignment = false;
         let strat = EmaTrendPullbackV1::new(cfg);
         let input = good_long_input();
         let sig = strat.evaluate(&ctx(), &input).unwrap().unwrap();

@@ -64,9 +64,9 @@ impl Default for V2Config {
 /// by `ResearchConfig::validate_strategy_config()` before use.
 #[derive(Debug, Clone)]
 pub struct EtpConfig {
-    pub require_strict_15m_trend: bool,
-    pub require_strict_5m_confirmation: bool,
-    pub require_1m_ema_alignment: bool,
+    pub require_strict_screening_trend: bool,
+    pub require_strict_confirmation_trend: bool,
+    pub require_entry_ema_alignment: bool,
     pub allow_long: bool,
     pub allow_short: bool,
     pub pullback_to: String,
@@ -89,9 +89,9 @@ pub struct EtpConfig {
 impl Default for EtpConfig {
     fn default() -> Self {
         Self {
-            require_strict_15m_trend: true,
-            require_strict_5m_confirmation: true,
-            require_1m_ema_alignment: true,
+            require_strict_screening_trend: true,
+            require_strict_confirmation_trend: true,
+            require_entry_ema_alignment: true,
             allow_long: true,
             allow_short: true,
             pullback_to: "ema21_or_vwap".to_string(),
@@ -169,9 +169,9 @@ pub struct ResearchConfig {
     pub v2_enable_long: bool,
     pub v2_enable_short: bool,
     // etp strategy filters
-    pub etp_require_strict_15m_trend: bool,
-    pub etp_require_strict_5m_confirmation: bool,
-    pub etp_require_1m_ema_alignment: bool,
+    pub etp_require_strict_screening_trend: bool,
+    pub etp_require_strict_confirmation_trend: bool,
+    pub etp_require_entry_ema_alignment: bool,
     pub etp_allow_long: bool,
     pub etp_allow_short: bool,
     pub etp_pullback_to: String,
@@ -234,9 +234,9 @@ impl Default for ResearchConfig {
             v2_cooldown_bars: 0,
             v2_enable_long: true,
             v2_enable_short: true,
-            etp_require_strict_15m_trend: true,
-            etp_require_strict_5m_confirmation: true,
-            etp_require_1m_ema_alignment: true,
+            etp_require_strict_screening_trend: true,
+            etp_require_strict_confirmation_trend: true,
+            etp_require_entry_ema_alignment: true,
             etp_allow_long: true,
             etp_allow_short: true,
             etp_pullback_to: "ema21_or_vwap".to_string(),
@@ -358,14 +358,14 @@ impl ResearchConfig {
                 "v2_enable_long" => cfg.v2_enable_long = value == "true",
                 "v2_enable_short" => cfg.v2_enable_short = value == "true",
                 // ETP filters
-                "etp_require_strict_15m_trend" => {
-                    cfg.etp_require_strict_15m_trend = value == "true"
+                "etp_require_strict_screening_trend" | "etp_require_strict_15m_trend" => {
+                    cfg.etp_require_strict_screening_trend = value == "true"
                 }
-                "etp_require_strict_5m_confirmation" => {
-                    cfg.etp_require_strict_5m_confirmation = value == "true"
+                "etp_require_strict_confirmation_trend" | "etp_require_strict_5m_confirmation" => {
+                    cfg.etp_require_strict_confirmation_trend = value == "true"
                 }
-                "etp_require_1m_ema_alignment" => {
-                    cfg.etp_require_1m_ema_alignment = value == "true"
+                "etp_require_entry_ema_alignment" | "etp_require_1m_ema_alignment" => {
+                    cfg.etp_require_entry_ema_alignment = value == "true"
                 }
                 "etp_allow_long" => cfg.etp_allow_long = value == "true",
                 "etp_allow_short" => cfg.etp_allow_short = value == "true",
@@ -420,9 +420,9 @@ impl ResearchConfig {
     /// Extract an `EtpConfig` from the etp_* fields of this `ResearchConfig`.
     pub fn etp_config(&self) -> EtpConfig {
         EtpConfig {
-            require_strict_15m_trend: self.etp_require_strict_15m_trend,
-            require_strict_5m_confirmation: self.etp_require_strict_5m_confirmation,
-            require_1m_ema_alignment: self.etp_require_1m_ema_alignment,
+            require_strict_screening_trend: self.etp_require_strict_screening_trend,
+            require_strict_confirmation_trend: self.etp_require_strict_confirmation_trend,
+            require_entry_ema_alignment: self.etp_require_entry_ema_alignment,
             allow_long: self.etp_allow_long,
             allow_short: self.etp_allow_short,
             pullback_to: self.etp_pullback_to.clone(),
@@ -776,41 +776,43 @@ impl ResearchConfig {
         }
     }
 
-    /// Validate that the three explicit timeframe roles match Phase 2 requirements:
-    ///   entry_timeframe        = "1m"
-    ///   screening_timeframe    = "15m"
-    ///   confirmation_timeframe = "5m"
+    /// Validate the three timeframe role assignments.
     ///
-    /// Returns `Err` if any value is unparseable or assigned to the wrong role.
+    /// Rules:
+    ///   - All three must be parseable Timeframe values.
+    ///   - All three must be distinct.
+    ///   - entry_tf < confirmation_tf < screening_tf (by duration).
+    ///
+    /// Any valid ascending combination is accepted, e.g.:
+    ///   1m / 5m / 15m  (original default)
+    ///   5m / 1h / 4h   (higher-timeframe)
+    ///   1m / 15m / 4h  (wide-range)
     pub fn validate_timeframes(&self) -> Result<(), NorthflowError> {
         let entry = Timeframe::from_str(&self.entry_timeframe)
             .map_err(|e| NorthflowError::ConfigError(format!("entry_timeframe invalid: {e}")))?;
-        let screening = Timeframe::from_str(&self.screening_timeframe).map_err(|e| {
-            NorthflowError::ConfigError(format!("screening_timeframe invalid: {e}"))
-        })?;
         let confirmation = Timeframe::from_str(&self.confirmation_timeframe).map_err(|e| {
             NorthflowError::ConfigError(format!("confirmation_timeframe invalid: {e}"))
         })?;
+        let screening = Timeframe::from_str(&self.screening_timeframe).map_err(|e| {
+            NorthflowError::ConfigError(format!("screening_timeframe invalid: {e}"))
+        })?;
 
-        if entry != Timeframe::OneMinute {
+        if entry == confirmation || entry == screening || confirmation == screening {
             return Err(NorthflowError::ConfigError(format!(
-                "entry_timeframe must be '1m', got '{}'. \
-                 Northflow Phase 2 expects: entry=1m, screening=15m, confirmation=5m",
-                self.entry_timeframe
+                "all three timeframe roles must be distinct: entry={}, confirmation={}, screening={}",
+                entry, confirmation, screening
             )));
         }
-        if screening != Timeframe::FifteenMinute {
+
+        if entry >= confirmation {
             return Err(NorthflowError::ConfigError(format!(
-                "screening_timeframe must be '15m', got '{}'. \
-                 Northflow Phase 2 expects: entry=1m, screening=15m, confirmation=5m",
-                self.screening_timeframe
+                "entry_timeframe ({entry}) must be shorter than confirmation_timeframe ({confirmation})"
             )));
         }
-        if confirmation != Timeframe::FiveMinute {
+
+        if confirmation >= screening {
             return Err(NorthflowError::ConfigError(format!(
-                "confirmation_timeframe must be '5m', got '{}'. \
-                 Northflow Phase 2 expects: entry=1m, screening=15m, confirmation=5m",
-                self.confirmation_timeframe
+                "confirmation_timeframe ({confirmation}) must be shorter than screening_timeframe ({screening})"
             )));
         }
 
@@ -856,59 +858,73 @@ mod tests {
     }
 
     #[test]
-    fn valid_explicit_timeframe_config_passes() {
+    fn default_timeframes_pass_validation() {
         let cfg = default_cfg();
+        // Default: 1m / 5m / 15m
         assert!(cfg.validate_timeframes().is_ok());
     }
 
     #[test]
-    fn invalid_entry_timeframe_string_fails() {
+    fn higher_tf_combo_passes() {
         let mut cfg = default_cfg();
-        cfg.entry_timeframe = "4h".to_string();
-        let err = cfg.validate_timeframes().unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("entry_timeframe"),
-            "expected mention of field: {msg}"
-        );
+        cfg.entry_timeframe = "5m".to_string();
+        cfg.confirmation_timeframe = "1h".to_string();
+        cfg.screening_timeframe = "4h".to_string();
+        assert!(cfg.validate_timeframes().is_ok());
     }
 
     #[test]
-    fn invalid_screening_timeframe_string_fails() {
+    fn another_valid_combo_passes() {
+        let mut cfg = default_cfg();
+        cfg.entry_timeframe = "1m".to_string();
+        cfg.confirmation_timeframe = "15m".to_string();
+        cfg.screening_timeframe = "4h".to_string();
+        assert!(cfg.validate_timeframes().is_ok());
+    }
+
+    #[test]
+    fn unparseable_entry_timeframe_fails() {
+        let mut cfg = default_cfg();
+        cfg.entry_timeframe = "badval".to_string();
+        let err = cfg.validate_timeframes().unwrap_err();
+        assert!(err.to_string().contains("entry_timeframe"), "{}", err);
+    }
+
+    #[test]
+    fn unparseable_screening_timeframe_fails() {
         let mut cfg = default_cfg();
         cfg.screening_timeframe = "badval".to_string();
         assert!(cfg.validate_timeframes().is_err());
     }
 
     #[test]
-    fn wrong_entry_timeframe_role_fails() {
+    fn duplicate_timeframes_fail() {
+        let mut cfg = default_cfg();
+        cfg.entry_timeframe = "5m".to_string();
+        cfg.confirmation_timeframe = "5m".to_string(); // same as entry
+        cfg.screening_timeframe = "15m".to_string();
+        let err = cfg.validate_timeframes().unwrap_err();
+        assert!(err.to_string().contains("distinct"), "{}", err);
+    }
+
+    #[test]
+    fn wrong_order_entry_ge_confirmation_fails() {
         let mut cfg = default_cfg();
         cfg.entry_timeframe = "15m".to_string();
+        cfg.confirmation_timeframe = "5m".to_string(); // confirmation shorter than entry
+        cfg.screening_timeframe = "1h".to_string();
         let err = cfg.validate_timeframes().unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("entry=1m"),
-            "error should mention expected roles: {msg}"
-        );
+        assert!(err.to_string().contains("entry_timeframe"), "{}", err);
     }
 
     #[test]
-    fn wrong_screening_timeframe_role_fails() {
+    fn wrong_order_confirmation_ge_screening_fails() {
         let mut cfg = default_cfg();
-        cfg.screening_timeframe = "1m".to_string();
+        cfg.entry_timeframe = "1m".to_string();
+        cfg.confirmation_timeframe = "4h".to_string();
+        cfg.screening_timeframe = "1h".to_string(); // screening shorter than confirmation
         let err = cfg.validate_timeframes().unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("entry=1m"),
-            "error should list expected roles: {msg}"
-        );
-    }
-
-    #[test]
-    fn wrong_confirmation_timeframe_role_fails() {
-        let mut cfg = default_cfg();
-        cfg.confirmation_timeframe = "1h".to_string();
-        assert!(cfg.validate_timeframes().is_err());
+        assert!(err.to_string().contains("confirmation_timeframe"), "{}", err);
     }
 
     #[test]
@@ -1198,8 +1214,8 @@ mod tests {
     fn parses_etp_defaults() {
         let cfg = ResearchConfig::default();
         let etp = cfg.etp_config();
-        assert!(etp.require_strict_15m_trend);
-        assert!(etp.require_1m_ema_alignment);
+        assert!(etp.require_strict_screening_trend);
+        assert!(etp.require_entry_ema_alignment);
         assert!(etp.allow_long);
         assert!(etp.allow_short);
         assert_eq!(etp.pullback_to, "ema21_or_vwap");
